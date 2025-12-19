@@ -131,14 +131,50 @@ export class Game{
 
   _drawPlayer(){
     const z=this.cam.zoom, p=this.player, c=this.ctx;
-    const frames=this.tilesets.palette.player.frames; const fi=frames[p.frame]??frames[0];
-    const ts=this.tilesets.tilesets.player, img=this.images.player, r=srcRect(fi,ts.cols);
+    const frames=this.tilesets?.palette?.player?.frames || [0];
+    const lower = frames[p.frame] ?? frames[0];
+    const upper = (lower + 4); // TX Player.png uses upper body one row below (32px down => +4 tiles in 4-col sheet)
+
+    const ts=this.tilesets.tilesets.player, img=this.images.player;
+    const cols=ts.cols;
+
     const s=this._w2s(p.x,p.y);
-    c.fillStyle="rgba(0,0,0,0.35)"; c.beginPath(); c.ellipse(s.x,s.y+18*z,10*z,5*z,0,0,Math.PI*2); c.fill();
-    c.drawImage(img,r.x,r.y,r.w,r.h,s.x-(TILE*z)/2,s.y-(TILE*z),TILE*z,TILE*z);
-    c.font=`${Math.floor(12*z)}px system-ui`; c.textAlign="center";
-    c.fillStyle="rgba(0,0,0,0.6)"; c.fillText(p.name,s.x+1,s.y-(TILE*z)-8*z+1);
-    c.fillStyle="#d6b35f"; c.fillText(p.name,s.x,s.y-(TILE*z)-8*z);
+
+    // fallback: if sprite not ready, draw a visible marker + name
+    if(!img || cols<=0 || lower==null){
+      c.fillStyle="rgba(0,0,0,0.35)";
+      c.beginPath(); c.ellipse(s.x,s.y+18*z,10*z,5*z,0,0,Math.PI*2); c.fill();
+      c.fillStyle="#58b2ff";
+      c.fillRect(s.x-6*z,s.y-18*z,12*z,18*z);
+    } else {
+      const rL=srcRect(lower, cols);
+      const rU=srcRect(upper, cols);
+
+      // shadow
+      c.fillStyle="rgba(0,0,0,0.35)";
+      c.beginPath(); c.ellipse(s.x,s.y+18*z,10*z,5*z,0,0,Math.PI*2); c.fill();
+
+      // draw upper then lower (32x64 total), anchored at feet
+      const w=TILE*z, h=TILE*z;
+      // upper at y-2h, lower at y-h
+      c.drawImage(img, rU.x,rU.y,rU.w,rU.h, s.x-w/2, s.y-2*h, w,h);
+      c.drawImage(img, rL.x,rL.y,rL.w,rL.h, s.x-w/2, s.y-h,   w,h);
+
+      // optional 1px outline around the sprite for readability
+      c.globalAlpha=0.85;
+      c.strokeStyle="rgba(0,0,0,0.45)";
+      c.lineWidth=Math.max(1, Math.floor(1*z));
+      c.strokeRect(s.x-w/2, s.y-2*h, w, 2*h);
+      c.globalAlpha=1;
+    }
+
+    // nameplate (always)
+    c.font=`${Math.floor(12*z)}px system-ui`;
+    c.textAlign="center";
+    c.fillStyle="rgba(0,0,0,0.6)";
+    c.fillText(p.name, s.x+1, s.y-2*TILE*z-8*z+1);
+    c.fillStyle="#d6b35f";
+    c.fillText(p.name, s.x,   s.y-2*TILE*z-8*z);
   }
 
   _drawMinimap(){
