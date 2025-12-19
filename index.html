@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rune-like Web Game (Starter)</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">🗡️ Rune-like Starter</div>
+      <div class="right">
+        <span id="statusPill" class="pill">Offline</span>
+        <button id="btnSignOut" class="btn ghost" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- AUTH -->
+      <section id="viewAuth" class="card">
+        <h1>Sign in</h1>
+        <p class="muted">GitHub Pages + Supabase Auth. Username/password for now.</p>
+
+        <div class="grid2">
+          <label>
+            <span>Username</span>
+            <input id="authUsername" type="text" autocomplete="username" placeholder="yourname" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••••" />
+          </label>
+        </div>
+
+        <div class="row">
+          <button id="btnLogin" class="btn primary">Log in</button>
+          <button id="btnSignup" class="btn">Create account</button>
+        </div>
+
+        <details class="details">
+          <summary>Supabase config (required)</summary>
+          <p class="muted">
+            Open <code>app.js</code> and set <code>SUPABASE_URL</code> + <code>SUPABASE_ANON_KEY</code>.
+            In Supabase Auth settings, add your GitHub Pages URL to <b>Site URL</b> and <b>Additional Redirect URLs</b>.
+          </p>
+        </details>
+
+        <div id="authError" class="error" hidden></div>
+      </section>
+
+      <!-- CHARACTER CREATE -->
+      <section id="viewCharacter" class="card" hidden>
+        <h1>Create your character</h1>
+        <p class="muted">This creates a profile record tied to your Supabase user.</p>
+
+        <div class="grid2">
+          <label>
+            <span>Character name</span>
+            <input id="charName" type="text" maxlength="20" placeholder="e.g., Donkatsu" />
+            <small class="muted">3–20 chars. Letters, numbers, spaces, underscores.</small>
+          </label>
+
+          <label>
+            <span>Outfit color</span>
+            <input id="charColor" type="color" value="#3aa3ff" />
+          </label>
+        </div>
+
+        <div class="row">
+          <button id="btnCreateCharacter" class="btn primary">Create character</button>
+          <button id="btnBackToAuth" class="btn ghost">Back</button>
+        </div>
+
+        <div id="charError" class="error" hidden></div>
+      </section>
+
+      <!-- GAME -->
+      <section id="viewGame" class="game" hidden>
+        <div class="gameWrap">
+          <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+          <aside class="panel">
+            <div class="panelHead">
+              <div>
+                <div class="panelTitle">Chat</div>
+                <div id="whoami" class="muted small"></div>
+              </div>
+              <button id="btnReconnectChat" class="btn ghost smallbtn" title="Reconnect realtime">↻</button>
+            </div>
+
+            <div id="chatLog" class="chatLog" aria-live="polite"></div>
+
+            <form id="chatForm" class="chatForm" autocomplete="off">
+              <input id="chatInput" type="text" maxlength="200" placeholder="Type message… (Enter to send)" />
+              <button class="btn primary smallbtn" type="submit">Send</button>
+            </form>
+
+            <div class="muted tiny">
+              Tip: This uses Supabase Realtime <b>Broadcast</b> (no DB table needed).
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer muted">
+      RuneScape-inspired starter (original code/assets). Not affiliated with Jagex.
+    </footer>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
