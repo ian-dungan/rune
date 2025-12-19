@@ -19,5 +19,8 @@ export function safeUsername(raw){
 }
 
 export function usernameToEmail(username, domain){
-  return `${username.toLowerCase()}@${domain}`;
+  const u = (username ?? "").toString().trim();
+  const d = (domain ?? "").toString().trim();
+  if (!u || !d) return "";
+  return `${u.toLowerCase()}@${d}`;
 }

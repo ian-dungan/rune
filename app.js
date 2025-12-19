@@ -113,16 +113,14 @@ async function initSupabase() {
   supabase.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
 }
 
-async function getOrCreateLobbyWorld() {
+async function getLobbyWorld() {
+  // IMPORTANT: We do NOT auto-create worlds from the client.
+  // Most people keep rune.worlds INSERT locked down by RLS (admin-only).
+  // So we only SELECT here and show a helpful message if missing.
   const q = supabase.schema(RUNE_SCHEMA).from("worlds");
   const { data: rows, error } = await q.select("id,slug,name").eq("slug", DEFAULT_WORLD_SLUG).limit(1);
   if (error) throw error;
-  if (rows && rows.length) return rows[0];
-
-  const { data: created, error: e2 } = await q.insert({ slug: DEFAULT_WORLD_SLUG, name: "Lobby", seed: 12345, settings: {} })
-    .select("id,slug,name").single();
-  if (e2) throw e2;
-  return created;
+  return (rows && rows.length) ? rows[0] : null;
 }
 
 async function fetchMyProfile(userId) {
@@ -216,6 +214,7 @@ async function enterGame(offline=false) {
   btnZoomOut.onclick = () => game.zoomBy(1/1.15);
   btnCenter.onclick = () => game.centerCamera();
   window.addEventListener("keydown", (e) => {
+    if (!e.key) return;
     if (e.key.toLowerCase() === "m") panelMinimap.classList.toggle("hidden");
     if (e.key === "Enter") {
       if (document.activeElement === chatInput) chatSend.click();
@@ -236,10 +235,10 @@ async function enterGame(offline=false) {
   if (!profile) showToast("No profile found for this account (create one via Create Account).");
 
   let lobby = null;
-  try { lobby = await getOrCreateLobbyWorld(); }
+  try { lobby = await getLobbyWorld(); }
   catch (e) {
     console.warn(e);
-    showToast("Lobby missing. Create via SQL: insert into rune.worlds (slug,name,seed) values ('lobby','Lobby',12345) on conflict do nothing;");
+    showToast("Lobby missing. Create it in Supabase SQL editor (admin): INSERT INTO rune.worlds (slug,name,seed) VALUES ('lobby','Lobby',12345) ON CONFLICT (slug) DO NOTHING;");
   }
 
   worldPill.textContent = "World: " + (lobby?.name || "Lobby");
