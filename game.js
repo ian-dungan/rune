@@ -82,7 +82,7 @@ export class Game{
     const res=await fetch(`./assets/world/overworld/chunks/c_${cx}_${cy}.json`);
     if(!res.ok){
       const fill=new Array(CHUNK*CHUNK).fill(this.meta.defaultFill.tile);
-      const blank={cx,cy,layers:{ground:{tileset:"grass",data:fill},shadows:{tileset:"shadowPlant",data:new Array(CHUNK*CHUNK).fill(-1)},objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)}}};
+      const blank={cx,cy,layers:{ground_grass:{tileset:"grass",data:fill},ground_stone:{tileset:"stone",data:new Array(CHUNK*CHUNK).fill(-1)},shadows:{tileset:"shadowPlant",data:new Array(CHUNK*CHUNK).fill(-1)},objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)}}};
       this.cache.set(kk,blank); return blank;
     }
     const ch=await res.json(); this.cache.set(kk,ch);
@@ -106,7 +106,9 @@ export class Game{
   async _drawChunk(cx,cy){
     const ch=await this._chunk(cx,cy);
     const bx=cx*CHUNK*TILE, by=cy*CHUNK*TILE;
-    this._drawLayer(ch.layers.ground,bx,by,false);
+    if(ch.layers.ground_grass) this._drawLayer(ch.layers.ground_grass,bx,by,false);
+    if(ch.layers.ground_stone) this._drawLayer(ch.layers.ground_stone,bx,by,false);
+    if(ch.layers.ground) this._drawLayer(ch.layers.ground,bx,by,false);
     this._drawLayer(ch.layers.shadows,bx,by,true);
     this._drawLayer(ch.layers.objects,bx,by,false);
   }
