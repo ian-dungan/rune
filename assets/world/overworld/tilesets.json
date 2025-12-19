@@ -1,0 +1,106 @@
+{
+  "tileSize": 32,
+  "tilesets": {
+    "grass": {
+      "src": "assets/tiles/TX Tileset Grass.png",
+      "cols": 8,
+      "rows": 8
+    },
+    "stone": {
+      "src": "assets/tiles/TX Tileset Stone Ground.png",
+      "cols": 8,
+      "rows": 8
+    },
+    "plant": {
+      "src": "assets/tiles/TX Plant.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "shadowPlant": {
+      "src": "assets/tiles/TX Shadow Plant.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "props": {
+      "src": "assets/tiles/TX Props.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "wall": {
+      "src": "assets/tiles/TX Tileset Wall.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "struct": {
+      "src": "assets/tiles/TX Struct.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "shadow": {
+      "src": "assets/tiles/TX Shadow.png",
+      "cols": 16,
+      "rows": 16
+    },
+    "player": {
+      "src": "assets/tiles/TX Player.png",
+      "cols": 4,
+      "rows": 4
+    }
+  },
+  "palette": {
+    "grass": {
+      "set": "grass",
+      "candidates": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "path": {
+      "set": "stone",
+      "candidates": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "tree": {
+      "set": "plant",
+      "candidates": [
+        2,
+        6,
+        17,
+        18,
+        19,
+        21
+      ]
+    },
+    "treeShadow": {
+      "set": "shadowPlant",
+      "candidates": [
+        49,
+        50,
+        51,
+        53,
+        54,
+        55
+      ]
+    },
+    "player": {
+      "set": "player",
+      "frames": [
+        0,
+        1,
+        2,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  }
+}

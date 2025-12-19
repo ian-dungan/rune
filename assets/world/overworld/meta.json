@@ -1,13 +1,16 @@
 {
   "tileSize": 32,
-  "atlasCols": 45,
-  "atlasRows": 30,
-  "chunkTiles": 128,
-  "worldTiles": 10800,
-  "spawn": {
-    "x": 5400,
-    "y": 5400
+  "chunkSize": 32,
+  "worldChunks": {
+    "w": 5,
+    "h": 5
   },
-  "defaultTile": "water",
-  "version": 1
+  "originChunk": {
+    "cx": 2,
+    "cy": 2
+  },
+  "defaultFill": {
+    "set": "grass",
+    "tile": 0
+  }
 }

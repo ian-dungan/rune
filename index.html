@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Rune-Like (Starter)</title>
-  <link rel="icon" href="./favicon.ico" />
+  <title>Rune-Like</title>
   <link rel="stylesheet" href="./styles.css" />
   <meta name="color-scheme" content="dark">
 </head>
@@ -14,8 +13,8 @@
       <div class="brand">
         <div class="logo"></div>
         <div class="brandText">
-          <div class="brandTitle">Rune‑Like</div>
-          <div class="brandSub">2D MMO starter • GitHub Pages + Supabase</div>
+          <div class="brandTitle">Rune-Like</div>
+          <div class="brandSub">Top-down 2D MMO starter • Static overworld • Pixel perfect</div>
         </div>
       </div>
       <div class="topbarRight">
@@ -47,17 +46,12 @@
               <label>Character name</label>
               <input id="charName" maxlength="16" placeholder="Shown in-game" />
             </div>
-
-            <div class="field">
-              <label>Style</label>
-              <div class="styleGrid" id="styleGrid"></div>
-              <div class="hint">Pick a style—more customization coming next.</div>
-            </div>
+            <div class="hint">You can rename later.</div>
           </div>
 
           <div class="actions">
             <button id="btnPrimary" class="btn primary">Login</button>
-            <button id="btnGuest" class="btn">Enter Offline (No Supabase)</button>
+            <button id="btnGuest" class="btn">Enter Offline</button>
           </div>
 
           <div id="authMsg" class="msg"></div>
@@ -71,22 +65,12 @@
 
     <main id="screenGame" class="screen hidden">
       <div class="gameRoot">
-        <canvas id="game" width="1280" height="720"></canvas>
+        <canvas id="game"></canvas>
 
         <div class="hud">
           <div class="hudLeft">
             <div class="panel pTop" id="panelStats">
               <div class="panelTitle">Adventurer</div>
-              <div class="statsRow">
-                <div class="stat">
-                  <div class="statLabel">HP</div>
-                  <div class="bar"><div id="hpBar" class="barFill"></div></div>
-                </div>
-                <div class="stat">
-                  <div class="statLabel">Stam</div>
-                  <div class="bar"><div id="stamBar" class="barFill"></div></div>
-                </div>
-              </div>
               <div class="tiny" id="whereText">Loading…</div>
             </div>
 
@@ -116,26 +100,6 @@
                 <button id="btnCenter" class="btn small">Center</button>
               </div>
             </div>
-
-            <div class="panel pInv" id="panelInv">
-              <div class="panelTitleRow">
-                <div class="panelTitle">Inventory</div>
-                <div class="tiny">WIP</div>
-              </div>
-              <div class="invGrid" id="invGrid"></div>
-              <div class="tiny">Soon: skills, equipment, banking, crafting.</div>
-            </div>
-
-            <div class="panel pHelp" id="panelHelp">
-              <div class="panelTitle">Controls</div>
-              <div class="tiny">
-                • Click: move<br/>
-                • WASD: nudge<br/>
-                • Mouse wheel: zoom<br/>
-                • Enter: chat<br/>
-                • M: toggle minimap<br/>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -145,6 +109,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="./app.js?v=20251219-2"></script>
+  <script type="module" src="./app.js?v=20251219-topdown2"></script>
 </body>
 </html>
