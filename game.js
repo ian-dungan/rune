@@ -137,9 +137,15 @@ export class Game {
 
     window.addEventListener("keydown", (e)=>{
       if (["INPUT","TEXTAREA"].includes((document.activeElement?.tagName||"").toUpperCase())) return;
-      this._keys.add(e.key.toLowerCase());
+      const k = (e.key || "").toLowerCase();
+      if (!k) return;
+      this._keys.add(k);
     });
-    window.addEventListener("keyup", (e)=>this._keys.delete(e.key.toLowerCase()));
+    window.addEventListener("keyup", (e)=>{
+      const k = (e.key || "").toLowerCase();
+      if (!k) return;
+      this._keys.delete(k);
+    });
 
     this.canvas.addEventListener("pointerdown", (e)=>{
       const rect = this.canvas.getBoundingClientRect();

@@ -215,7 +215,7 @@ async function enterGame(offline=false) {
   btnCenter.onclick = () => game.centerCamera();
   window.addEventListener("keydown", (e) => {
     if (!e.key) return;
-    if (e.key.toLowerCase() === "m") panelMinimap.classList.toggle("hidden");
+    if ((e.key || "").toLowerCase() === "m") panelMinimap.classList.toggle("hidden");
     if (e.key === "Enter") {
       if (document.activeElement === chatInput) chatSend.click();
       else chatInput.focus();
