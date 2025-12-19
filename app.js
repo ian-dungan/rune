@@ -1,654 +1,362 @@
-// Rune-like Web Game Starter
-// Hosting: GitHub Pages
-// Backend: Supabase (free tier)
-//
-// 1) Set SUPABASE_URL and SUPABASE_ANON_KEY
-// 2) Run the SQL in the README section below (see bottom of this file)
-// 3) In Supabase Auth settings, add your GitHub Pages URL to Site URL + Redirect URLs
-//
-// Supabase docs:
-// - Installing supabase-js: https://supabase.com/docs/reference/javascript/installing
-// - Sign in with password: https://supabase.com/docs/reference/javascript/auth-signinwithpassword
-// - Realtime broadcast: https://supabase.com/docs/guides/realtime/broadcast
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
+// Rune-Like (polished world + UI)
 const SUPABASE_URL = "https://depvgmvmqapfxjwkkhas.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlcHZnbXZtcWFwZnhqd2traGFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NzkzNzgsImV4cCI6MjA4MDU1NTM3OH0.WLkWVbp86aVDnrWRMb-y4gHmEOs9sRpTwvT8hTmqHC0";
 
-// ---- UI refs
-const viewAuth = document.querySelector("#viewAuth");
-const viewCharacter = document.querySelector("#viewCharacter");
-const viewGame = document.querySelector("#viewGame");
-
-const statusPill = document.querySelector("#statusPill");
-const btnSignOut = document.querySelector("#btnSignOut");
-
-const authUsername = document.querySelector("#authUsername");
-const authPassword = document.querySelector("#authPassword");
-const btnLogin = document.querySelector("#btnLogin");
-const btnSignup = document.querySelector("#btnSignup");
-const authError = document.querySelector("#authError");
-
-const charName = document.querySelector("#charName");
-const charColor = document.querySelector("#charColor");
-const btnCreateCharacter = document.querySelector("#btnCreateCharacter");
-const btnBackToAuth = document.querySelector("#btnBackToAuth");
-const charError = document.querySelector("#charError");
-
-const whoami = document.querySelector("#whoami");
-const chatLog = document.querySelector("#chatLog");
-const chatForm = document.querySelector("#chatForm");
-const chatInput = document.querySelector("#chatInput");
-const btnReconnectChat = document.querySelector("#btnReconnectChat");
-
-const canvas = document.querySelector("#gameCanvas");
-const ctx = canvas.getContext("2d");
-
-// ---- State
-let supabase = null;
-let session = null;
-let profile = null;
-
-// Rune game namespace
 const RUNE_SCHEMA = "rune";
 const DEFAULT_WORLD_SLUG = "lobby";
-let currentWorld = null; // {id, slug, name}
+const FAKE_EMAIL_DOMAIN = "users.rune.local";
 
-let chatChannel = null;
-let chatConnected = false;
+import { Game } from "./game.js";
+import { showToast, nowISO, safeUsername, usernameToEmail } from "./util.js";
 
-function setStatus(ok, text){
-  statusPill.textContent = text;
-  statusPill.classList.toggle("ok", !!ok);
+const $ = (id) => document.getElementById(id);
+
+const screenAuth = $("screenAuth");
+const screenGame = $("screenGame");
+
+const tabLogin = $("tabLogin");
+const tabSignup = $("tabSignup");
+const btnPrimary = $("btnPrimary");
+const btnGuest = $("btnGuest");
+const btnLogout = $("btnLogout");
+
+const authUsername = $("authUsername");
+const authPassword = $("authPassword");
+const signupExtras = $("signupExtras");
+const charName = $("charName");
+const styleGrid = $("styleGrid");
+const authMsg = $("authMsg");
+
+const chatLog = $("chatLog");
+const chatInput = $("chatInput");
+const chatSend = $("chatSend");
+const worldPill = $("worldPill");
+
+const hpBar = $("hpBar");
+const stamBar = $("stamBar");
+const whereText = $("whereText");
+const fpsText = $("fpsText");
+const btnZoomIn = $("btnZoomIn");
+const btnZoomOut = $("btnZoomOut");
+const btnCenter = $("btnCenter");
+const panelMinimap = $("panelMinimap");
+const invGrid = $("invGrid");
+
+let mode = "login";
+let supabase = null;
+let session = null;
+let game = null;
+
+let selectedStyle = 0;
+const STYLE_PRESETS = [
+  { hair:"#2b1b0a", skin:"#d9b48a", shirt:"#2a88ff", pants:"#23435f" },
+  { hair:"#0a0a0a", skin:"#c9966b", shirt:"#53d18a", pants:"#2b2f3a" },
+  { hair:"#6a3b14", skin:"#f0c9a4", shirt:"#d6b35f", pants:"#4a3a2b" },
+  { hair:"#b9b9b9", skin:"#d4a57f", shirt:"#a85dff", pants:"#333b4a" },
+  { hair:"#1b3c5a", skin:"#e0b18d", shirt:"#ff5a6a", pants:"#33425f" },
+];
+
+function setMsg(text, kind="") {
+  authMsg.className = "msg " + (kind || "");
+  authMsg.textContent = text || "";
 }
 
-function show(el){
-  el.hidden = false;
-}
-function hide(el){
-  el.hidden = true;
-}
-
-function setError(el, msg){
-  el.textContent = msg;
-  el.hidden = !msg;
+function setMode(next) {
+  mode = next;
+  tabLogin.classList.toggle("active", mode==="login");
+  tabSignup.classList.toggle("active", mode==="signup");
+  signupExtras.classList.toggle("hidden", mode!=="signup");
+  btnPrimary.textContent = mode==="login" ? "Login" : "Create Account";
+  setMsg("");
 }
 
-function normalizeUsername(raw){
-  const u = (raw ?? "").trim();
-  // 3-16 chars, letters/numbers/underscore. (Simple + Rune-like.)
-  if(!/^[A-Za-z0-9_]{3,16}$/.test(u)) return null;
-  return u;
-}
-
-function usernameToEmail(username){
-  // Supabase Auth requires an email identifier for password auth.
-  // We map usernames to a deterministic "email alias" so users log in with username only.
-  return `${username.toLowerCase()}@users.rune.local`;
-}
-
-function isConfigured(){
-  return SUPABASE_URL.startsWith("http") && SUPABASE_ANON_KEY.length > 50;
-}
-
-function safeText(s){
-  // Basic HTML escaping to prevent chat injection
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function formatTime(ts){
-  try{
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-  }catch{
-    return "";
-  }
-}
-
-// ---- Auth + Profile
-async function initSupabase(){
-  if(!isConfigured()){
-    setStatus(false, "Configure Supabase");
-    return;
-  }
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // Restore existing session quickly
-  const { data } = await supabase.auth.getSession();
-  session = data.session ?? null;
-
-  supabase.auth.onAuthStateChange((_event, newSession) => {
-    session = newSession;
-    // Re-evaluate screens when auth changes
-    route().catch(console.error);
+function renderStyleGrid() {
+  styleGrid.innerHTML = "";
+  STYLE_PRESETS.forEach((s, i) => {
+    const d = document.createElement("div");
+    d.className = "styleCard" + (i===selectedStyle ? " selected" : "");
+    const sw = document.createElement("div");
+    sw.className = "styleSwatch";
+    sw.style.background = `linear-gradient(135deg, ${s.hair}, ${s.shirt}, ${s.pants})`;
+    d.appendChild(sw);
+    d.onclick = () => { selectedStyle = i; renderStyleGrid(); };
+    styleGrid.appendChild(d);
   });
-
-  await route();
 }
 
-async function route(){
-  setError(authError, "");
-  setError(charError, "");
-
-  btnSignOut.hidden = !session;
-
-  if(!supabase){
-    hide(viewCharacter); hide(viewGame); show(viewAuth);
-    return;
+function ensureInvGrid() {
+  invGrid.innerHTML = "";
+  for (let i=0;i<25;i++){
+    const s = document.createElement("div");
+    s.className = "invSlot";
+    invGrid.appendChild(s);
   }
-
-  if(!session){
-    setStatus(false, "Signed out");
-    hide(viewCharacter); hide(viewGame); show(viewAuth);
-    await disconnectChat();
-    return;
-  }
-
-  setStatus(true, "Signed in");
-
-  // Load profile
-  const userId = session.user.id;
-  const { data: prof, error } = await supabase
-    .schema(RUNE_SCHEMA).from("player_profiles")
-    .select("id, user_id, username, settings")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if(error){
-    console.error(error);
-    setError(authError, "Profile load error: " + error.message);
-    hide(viewCharacter); hide(viewGame); show(viewAuth);
-    return;
-  }
-
-  profile = prof ?? null;
-  const lookObj = profile?.settings?.look ?? null;
-  if(profile) profile.look = lookObj;
-
-  if(!profile || !lookObj || !lookObj.name){
-    // Character creation required
-    hide(viewAuth); hide(viewGame); show(viewCharacter);
-    whoami.textContent = "";
-    await disconnectChat();
-    return;
-  }
-
-  // Game
-  hide(viewAuth); hide(viewCharacter); show(viewGame);
-
-  // Ensure we have a world context for chat/game data
-  try{
-    if(!currentWorld) await loadDefaultWorld();
-  }catch(e){
-    appendSystem(String(e.message ?? e));
-  }
-
-  whoami.textContent = `You are: ${profile.username} (${profile.look?.name ?? 'no character'})`;
-  startRenderer();
-  await connectChat();
 }
 
-// ---- Buttons
-btnLogin.addEventListener("click", async () => {
-  setError(authError, "");
-  if(!isConfigured()){
-    setError(authError, "Open app.js and set SUPABASE_URL and SUPABASE_ANON_KEY.");
-    return;
-  }
-
-  const username = normalizeUsername(authUsername.value);
-  const password = authPassword.value;
-
-  if(!username || !password){
-    setError(authError, "Username and password required.");
-    return;
-  }
-
-  const email = usernameToEmail(username);
-
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if(error){
-    setError(authError, error.message);
-    return;
-  }
-
-  // route() will run via auth state change
-});
-
-btnSignup.addEventListener("click", async () => {
-  setError(authError, "");
-  if(!isConfigured()){
-    setError(authError, "Open app.js and set SUPABASE_URL and SUPABASE_ANON_KEY.");
-    return;
-  }
-
-  const username = normalizeUsername(authUsername.value);
-  const password = authPassword.value;
-
-  if(!username || !password){
-    setError(authError, "Username and password required. Username: 3–16 letters/numbers/_");
-    return;
-  }
-
-  const email = usernameToEmail(username);
-
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { username } }
-  });
-
-  if(error){
-    setError(authError, error.message);
-    return;
-  }
-
-  // For a "username-only" experience, turn OFF email confirmations in Supabase Auth settings.
-  // If confirmations are ON, data.session may be null here.
-  if(!data.session){
-    setError(authError, "Account created, but email confirmations are enabled. Disable confirmations in Supabase Auth → Providers → Email, then try logging in.");
-    return;
-  }
-
-  // Create a base profile row (enforces unique username at DB level too)
-  const ins = await supabase.schema(RUNE_SCHEMA).from("player_profiles").insert({
-    id: data.user.id,
-    username,
-    look: {}
-  });
-
-  if(ins.error){
-    // Very rare if races happen; sign out so user can try again cleanly
-    await supabase.auth.signOut();
-    setError(authError, "That username is taken. Please choose another.");
-    return;
-  }
-
-  // route() will take the user to character creation
-});
-btnSignOut.addEventListener("click", async () => {
-  if(!supabase) return;
-  await supabase.auth.signOut();
-});
-
-btnBackToAuth.addEventListener("click", async () => {
-  // Sign out and back
-  if(supabase) await supabase.auth.signOut();
-});
-
-btnCreateCharacter.addEventListener("click", async () => {
-  setError(charError, "");
-  if(!session) return;
-
-  const raw = charName.value.trim();
-  const charDisplayName = raw.replace(/\s+/g, " ");
-  const ok = /^[A-Za-z0-9_ ]{3,20}$/.test(charDisplayName);
-
-  if(!ok){
-    setError(charError, "Name must be 3–20 chars, using letters/numbers/spaces/_ only.");
-    return;
-  }
-
-  const username = profile?.username ?? session.user.user_metadata?.username ?? "Player";
-
-  const look = {
-    name: charDisplayName,
-    color: charColor.value
-  };
-
-  // Upsert profile tied to auth uid
-  const { error } = await supabase
-    .schema(RUNE_SCHEMA).from("player_profiles")
-    .upsert({ user_id: session.user.id, username, settings: { look } }, { onConflict: "user_id" });
-if(error){
-    setError(charError, error.message);
-    return;
-  }
-
-  await route();
-});
-
-
-async function loadDefaultWorld(){
-  if(!supabase) return null;
-  const { data, error } = await supabase
-    .schema(RUNE_SCHEMA)
-    .from("worlds")
-    .select("id, slug, name")
-    .eq("slug", DEFAULT_WORLD_SLUG)
-    .maybeSingle();
-
-  if(error){
-    console.error(error);
-    throw new Error("World load error: " + error.message);
-  }
-  if(!data){
-    throw new Error(`No Rune world found with slug "${DEFAULT_WORLD_SLUG}". Create one row in rune.worlds (slug, name, seed).`);
-  }
-  currentWorld = data;
-  return currentWorld;
-}
-
-// ---- Chat (Realtime Broadcast)
-async function connectChat(){
-  if(!supabase || !session || !profile) return;
-
-  try{
-    if(!currentWorld) await loadDefaultWorld();
-  }catch(e){
-    appendSystem(String(e.message ?? e));
-    return;
-  }
-
-  await disconnectChat();
-
-  // We use Broadcast for realtime delivery (simple + fast),
-  // and we ALSO write to rune.chat_messages for persistence/mod tools.
-  chatChannel = supabase.channel(`chat:${DEFAULT_WORLD_SLUG}`, {
-    config: { broadcast: { self: true } }
-  });
-
-  chatChannel.on("broadcast", { event: "message" }, ({ payload }) => {
-    appendChat(payload);
-  });
-
-  chatChannel.subscribe((status) => {
-    chatConnected = status === "SUBSCRIBED";
-    btnReconnectChat.title = chatConnected ? "Realtime connected" : "Reconnect realtime";
-  });
-
-  // Load recent chat history (best-effort)
-  try{
-    const { data, error } = await supabase
-      .schema(RUNE_SCHEMA)
-      .from("chat_messages")
-      .select("id, user_id, message, created_at")
-      .eq("world_id", currentWorld.id)
-      .order("created_at", { ascending: true })
-      .limit(50);
-
-    if(error) throw error;
-    if(data && data.length){
-      appendSystem(`Loaded ${data.length} recent messages.`);
-      for(const row of data){
-        const shortId = String(row.user_id).slice(0, 6);
-        const name = (row.user_id === session.user.id) ? profile.username : `Player-${shortId}`;
-        appendChat({ username: name, text: row.message, ts: row.created_at });
-      }
-    }
-  }catch(e){
-    console.warn(e);
-  }
-
-  btnReconnectChat.disabled = false;
-}
-
-async function disconnectChat(){
-  chatConnected = false;
-  if(chatChannel && supabase){
-    try{ await supabase.removeChannel(chatChannel); }catch(e){ console.warn(e); }
-  }
-  chatChannel = null;
-}
-
-btnReconnectChat.addEventListener("click", async () => {
-  btnReconnectChat.disabled = true;
-  await connectChat();
-  btnReconnectChat.disabled = false;
-});
-
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
-  if(!text) return;
-  if(!chatChannel || !session || !profile) return;
-  if(!currentWorld){
-    appendSystem("No world loaded; chat is unavailable.");
-    return;
-  }
-
-  chatInput.value = "";
-
-  // 1) Persist to DB (rune.chat_messages)
-  const { error: insErr } = await supabase
-    .schema(RUNE_SCHEMA)
-    .from("chat_messages")
-    .insert({
-      world_id: currentWorld.id,
-      user_id: session.user.id,
-      message: text
-    });
-
-  if(insErr){
-    appendSystem(`Send failed: ${insErr.message}`);
-    return;
-  }
-
-  // 2) Broadcast realtime payload for instant delivery (includes username)
-  const payload = {
-    id: crypto.randomUUID(),
-    userId: session.user.id,
-    username: profile.username,
-    text,
-    ts: new Date().toISOString()
-  };
-
-  const { error: bcErr } = await chatChannel.send({
-    type: "broadcast",
-    event: "message",
-    payload
-  });
-
-  if(bcErr){
-    // DB write succeeded; realtime delivery failed
-    appendSystem(`Realtime delivery failed: ${bcErr.message}`);
-  }
-});
-
-function appendSystem(text){
-  appendChat({ username: "System", text, ts: new Date().toISOString(), system: true });
-}
-
-function appendChat(msg){
-  // Keep the log lightweight
-  const max = 200;
-  while(chatLog.children.length > max) chatLog.removeChild(chatLog.firstChild);
-
-  const div = document.createElement("div");
-  div.className = "msg";
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  const name = msg.system ? "System" : (msg.username ?? "Unknown");
-  meta.innerHTML = `<span><b>${safeText(name)}</b></span><span>${safeText(formatTime(msg.ts))}</span>`;
-
-  const text = document.createElement("div");
-  text.className = "text";
-  text.innerHTML = safeText(msg.text ?? "");
-
-  div.appendChild(meta);
-  div.appendChild(text);
-  chatLog.appendChild(div);
+function appendChatLine({name, message, created_at}) {
+  const line = document.createElement("div");
+  line.className = "chatLine";
+  const ts = created_at ? new Date(created_at).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "";
+  const esc = (v)=> (v??"").toString().replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+  line.innerHTML = `<span class="chatMeta">[${ts}]</span> <span class="chatName">${esc(name)}</span>: ${esc(message)}`;
+  chatLog.appendChild(line);
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
-// ---- Minimal 2D renderer (Rune-like vibe, placeholder art)
-let raf = 0;
-let t0 = 0;
+async function initSupabase() {
+  if (!window.supabase) { setMsg("Supabase library failed to load.", "bad"); return; }
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-function startRenderer(){
-  if(raf) return;
-  t0 = performance.now();
-  raf = requestAnimationFrame(loop);
-}
-function stopRenderer(){
-  if(raf) cancelAnimationFrame(raf);
-  raf = 0;
+  const { data: { session: s0 } } = await supabase.auth.getSession();
+  session = s0 || null;
+
+  supabase.auth.onAuthStateChange((_event, newSession) => { session = newSession; });
 }
 
-function loop(now){
-  const dt = Math.min(0.05, (now - t0) / 1000);
-  t0 = now;
+async function getOrCreateLobbyWorld() {
+  const q = supabase.schema(RUNE_SCHEMA).from("worlds");
+  const { data: rows, error } = await q.select("id,slug,name").eq("slug", DEFAULT_WORLD_SLUG).limit(1);
+  if (error) throw error;
+  if (rows && rows.length) return rows[0];
 
-  draw(now, dt);
-
-  raf = requestAnimationFrame(loop);
+  const { data: created, error: e2 } = await q.insert({ slug: DEFAULT_WORLD_SLUG, name: "Lobby", seed: 12345, settings: {} })
+    .select("id,slug,name").single();
+  if (e2) throw e2;
+  return created;
 }
 
-function draw(now, dt){
-  const w = canvas.width;
-  const h = canvas.height;
+async function fetchMyProfile(userId) {
+  const { data, error } = await supabase.schema(RUNE_SCHEMA)
+    .from("player_profiles")
+    .select("id,user_id,username,settings,role,active_world_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
 
-  // Background
-  ctx.clearRect(0, 0, w, h);
+async function createMyProfile(userId, username, style) {
+  const { data, error } = await supabase.schema(RUNE_SCHEMA)
+    .from("player_profiles")
+    .insert({ user_id: userId, username, settings: { style, created_at: nowISO() } })
+    .select("id,user_id,username,settings,role,active_world_id")
+    .single();
+  if (error) throw error;
+  return data;
+}
 
-  // Tile grid
-  const tile = 32;
-  for(let y=0; y<h; y+=tile){
-    for(let x=0; x<w; x+=tile){
-      const n = (Math.sin((x+y)*0.08) + Math.sin((x-now*0.02)*0.05)) * 0.5;
-      const g = 70 + Math.floor((n+1)*20);
-      ctx.fillStyle = `rgb(20, ${g}, 40)`;
-      ctx.fillRect(x, y, tile, tile);
-      // subtle edge
-      ctx.strokeStyle = "rgba(0,0,0,.18)";
-      ctx.strokeRect(x, y, tile, tile);
+async function resolveDisplayName(userId) {
+  if (!game) return "Player";
+  const cached = game.getNameCache(userId);
+  if (cached) return cached;
+
+  try {
+    const { data, error } = await supabase.schema(RUNE_SCHEMA)
+      .from("player_profiles")
+      .select("username")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!error && data?.username) { game.setNameCache(userId, data.username); return data.username; }
+  } catch {}
+  const fallback = "Player-" + userId.slice(0,6);
+  game.setNameCache(userId, fallback);
+  return fallback;
+}
+
+async function loadRecentChat(worldId) {
+  chatLog.innerHTML = "";
+  const { data, error } = await supabase.schema(RUNE_SCHEMA)
+    .from("chat_messages")
+    .select("id,user_id,message,created_at")
+    .eq("world_id", worldId)
+    .order("created_at", { ascending: true })
+    .limit(50);
+  if (error) throw error;
+
+  for (const m of (data || [])) {
+    const name = await resolveDisplayName(m.user_id);
+    appendChatLine({ name, message: m.message, created_at: m.created_at });
+  }
+}
+
+function setupRealtimeBroadcast(worldId) {
+  const chan = supabase.channel(`rune-chat:${worldId}`);
+  chan.on("broadcast", { event: "chat" }, (payload) => {
+    const msg = payload?.payload;
+    if (!msg) return;
+    appendChatLine({ name: msg.name || "Player", message: msg.message || "", created_at: msg.created_at || nowISO() });
+  });
+  chan.subscribe();
+  return chan;
+}
+
+async function sendChat(worldId, myUserId, text, myName, chan) {
+  const message = (text || "").trim();
+  if (!message) return;
+
+  await supabase.schema(RUNE_SCHEMA).from("chat_messages").insert({ world_id: worldId, user_id: myUserId, message });
+
+  await chan.send({ type: "broadcast", event: "chat", payload: { name: myName, message, created_at: nowISO() } });
+}
+
+async function enterGame(offline=false) {
+  screenAuth.classList.add("hidden");
+  screenGame.classList.remove("hidden");
+
+  ensureInvGrid();
+
+  game = new Game({
+    canvas: $("game"),
+    minimap: $("minimap"),
+    onStatus: (s) => (whereText.textContent = s),
+    onFps: (fps) => (fpsText.textContent = `${fps.toFixed(0)} fps`)
+  });
+
+  btnZoomIn.onclick = () => game.zoomBy(1.15);
+  btnZoomOut.onclick = () => game.zoomBy(1/1.15);
+  btnCenter.onclick = () => game.centerCamera();
+  window.addEventListener("keydown", (e) => {
+    if (e.key.toLowerCase() === "m") panelMinimap.classList.toggle("hidden");
+    if (e.key === "Enter") {
+      if (document.activeElement === chatInput) chatSend.click();
+      else chatInput.focus();
     }
+  });
+
+  if (offline || !supabase || !session?.user) {
+    showToast("Offline mode. No saving / no multiplayer chat.");
+    game.setPlayerMeta({ name: "OfflineHero", style: STYLE_PRESETS[selectedStyle] });
+    game.start();
+    return;
   }
 
-  // Player
-  const color = profile?.look?.color ?? "#3aa3ff";
-  const px = w*0.5;
-  const py = h*0.58;
+  const userId = session.user.id;
 
-  // Shadow
-  ctx.fillStyle = "rgba(0,0,0,.35)";
-  ctx.beginPath();
-  ctx.ellipse(px, py+18, 16, 6, 0, 0, Math.PI*2);
-  ctx.fill();
+  let profile = await fetchMyProfile(userId);
+  if (!profile) showToast("No profile found for this account (create one via Create Account).");
 
-  // Body (simple)
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(px-14, py-26, 28, 44, 10);
-  ctx.fill();
+  let lobby = null;
+  try { lobby = await getOrCreateLobbyWorld(); }
+  catch (e) {
+    console.warn(e);
+    showToast("Lobby missing. Create via SQL: insert into rune.worlds (slug,name,seed) values ('lobby','Lobby',12345) on conflict do nothing;");
+  }
 
-  // Head
-  ctx.fillStyle = "rgb(235, 212, 182)";
-  ctx.beginPath();
-  ctx.arc(px, py-36, 12, 0, Math.PI*2);
-  ctx.fill();
+  worldPill.textContent = "World: " + (lobby?.name || "Lobby");
 
-  // Nameplate
-  ctx.font = "14px ui-sans-serif, system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(0,0,0,.55)";
-  ctx.fillText(profile?.username ?? "", px+1, py-56+1);
-  ctx.fillStyle = "white";
-  ctx.fillText(profile?.username ?? "", px, py-56);
+  hpBar.style.width = "76%";
+  stamBar.style.width = "64%";
 
-  // Tiny instruction
-  ctx.textAlign = "left";
-  ctx.font = "13px ui-sans-serif, system-ui";
-  ctx.fillStyle = "rgba(255,255,255,.85)";
-  ctx.fillText("Starter: auth + character create + realtime chat. Next: movement, map, inventory, combat.", 14, 22);
+  const myName = profile?.username || "Player";
+  const style = profile?.settings?.style || STYLE_PRESETS[0];
+  game.setPlayerMeta({ name: myName, style });
+  game.start();
+
+  if (lobby?.id) {
+    const worldId = lobby.id;
+    try { await loadRecentChat(worldId); }
+    catch (e) {
+      console.warn(e);
+      appendChatLine({ name:"System", message:"Chat history unavailable (RLS/policy).", created_at: nowISO() });
+    }
+    const chan = setupRealtimeBroadcast(worldId);
+
+    chatSend.onclick = async () => {
+      try {
+        const text = chatInput.value;
+        chatInput.value = "";
+        await sendChat(worldId, userId, text, myName, chan);
+      } catch (e) {
+        console.warn(e);
+        showToast("Chat send failed. Check RLS policies.");
+      }
+    };
+
+    chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") chatSend.click(); });
+  } else {
+    appendChatLine({ name:"System", message:"No world configured. Create rune.worlds row with slug 'lobby'.", created_at: nowISO() });
+  }
 }
 
-// Stop renderer if we leave game view
-const mo = new MutationObserver(() => {
-  if(viewGame.hidden) stopRenderer();
-  else startRenderer();
-});
-mo.observe(viewGame, { attributes:true, attributeFilter:["hidden"] });
+async function doLogin() {
+  setMsg("");
+  const u = safeUsername(authUsername.value);
+  const p = authPassword.value;
+  if (!u.ok) return setMsg(u.reason, "bad");
+  if (!p || p.length < 6) return setMsg("Password must be 6+ characters.", "bad");
 
-// ---- Kick off
-initSupabase().catch((e) => {
-  console.error(e);
-  setError(authError, String(e?.message ?? e));
-  setStatus(false, "Init error");
-});
+  const email = usernameToEmail(u.value, FAKE_EMAIL_DOMAIN);
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: p });
+  if (error) return setMsg(error.message || "Login failed.", "bad");
+  session = data.session;
+  setMsg("Logged in.", "good");
+  await enterGame(false);
+}
 
-/*
-===========================
-SUPABASE SQL (run once)
-========================
+async function doSignup() {
+  setMsg("");
+  const u = safeUsername(authUsername.value);
+  const p = authPassword.value;
+  if (!u.ok) return setMsg(u.reason, "bad");
+  if (!p || p.length < 6) return setMsg("Password must be 6+ characters.", "bad");
 
-This starter expects your RuneScape-like game tables to live in the `rune` schema:
+  const cname = (charName.value || u.value).trim().slice(0,16);
+  if (!cname) return setMsg("Character name required.", "bad");
 
-- rune.worlds
-- rune.player_profiles
-- rune.chat_messages
+  const email = usernameToEmail(u.value, FAKE_EMAIL_DOMAIN);
 
-Use the Rune-only migration we built in chat (recommended). If you want the minimum needed for this starter, here it is:
+  const { data, error } = await supabase.auth.signUp({ email, password: p });
+  if (error) return setMsg(error.message || "Sign up failed.", "bad");
 
-create schema if not exists rune;
+  session = data.session;
+  if (!session?.user) {
+    setMsg("Account created. Email confirmation is ON in Supabase — disable it for username-only auth.", "bad");
+    return;
+  }
 
--- Worlds (create at least one row for the default chat world)
-create table if not exists rune.worlds (
-  id uuid primary key default gen_random_uuid(),
-  slug text not null unique,
-  name text not null,
-  seed bigint not null,
-  settings jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
-);
+  try {
+    await createMyProfile(session.user.id, cname, STYLE_PRESETS[selectedStyle]);
+  } catch (e) {
+    const msg = (e?.message || "").toLowerCase();
+    if (msg.includes("duplicate") || msg.includes("unique") || msg.includes("username")) {
+      setMsg("That username is taken. Choose another.", "bad");
+      await supabase.auth.signOut();
+      return;
+    }
+    console.warn(e);
+    setMsg("Profile creation failed (RLS/policy).", "bad");
+    await supabase.auth.signOut();
+    return;
+  }
 
-insert into rune.worlds (slug, name, seed)
-values ('lobby', 'Lobby', 12345)
-on conflict (slug) do nothing;
+  setMsg("Account created. Entering game…", "good");
+  await enterGame(false);
+}
 
--- Player profile (1:1 with auth user)
-create table if not exists rune.player_profiles (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null unique references auth.users(id) on delete cascade,
-  username text,
-  username_norm text generated always as (lower(username)) stored,
-  settings jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
-);
+function wireUI() {
+  tabLogin.onclick = () => setMode("login");
+  tabSignup.onclick = () => setMode("signup");
+  btnPrimary.onclick = async () => {
+    if (!supabase) return setMsg("Supabase not ready yet.", "bad");
+    if (mode === "login") await doLogin();
+    else await doSignup();
+  };
 
-create unique index if not exists rune_player_profiles_username_norm_uq
-  on rune.player_profiles (username_norm);
+  btnGuest.onclick = () => enterGame(true);
+  btnLogout.onclick = async () => { try { await supabase?.auth.signOut(); } catch {} location.reload(); };
 
-alter table rune.player_profiles enable row level security;
+  authPassword.addEventListener("keydown", (e) => { if (e.key === "Enter") btnPrimary.click(); });
+}
 
-create policy "rune_profiles_read_own"
-on rune.player_profiles for select to authenticated
-using (user_id = auth.uid());
+(async function main(){
+  renderStyleGrid();
+  wireUI();
+  setMode("login");
 
-create policy "rune_profiles_insert_own"
-on rune.player_profiles for insert to authenticated
-with check (user_id = auth.uid());
+  await initSupabase();
 
-create policy "rune_profiles_update_own"
-on rune.player_profiles for update to authenticated
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
-
--- Chat persistence
-create table if not exists rune.chat_messages (
-  id uuid primary key default gen_random_uuid(),
-  world_id uuid not null references rune.worlds(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  message text not null check (char_length(message) between 1 and 200),
-  created_at timestamptz not null default now()
-);
-
-create index if not exists rune_chat_messages_world_created_idx
-  on rune.chat_messages (world_id, created_at desc);
-
-alter table rune.chat_messages enable row level security;
-
-create policy "rune_chat_read"
-on rune.chat_messages for select to authenticated
-using (true);
-
-create policy "rune_chat_insert"
-on rune.chat_messages for insert to authenticated
-with check (user_id = auth.uid());
-
-*/
+  if (supabase) {
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (s?.user) { session = s; await enterGame(false); }
+  }
+})();

@@ -2,113 +2,149 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rune-like Web Game (Starter)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Rune-Like (Starter)</title>
+  <link rel="icon" href="./favicon.ico" />
   <link rel="stylesheet" href="./styles.css" />
+  <meta name="color-scheme" content="dark">
 </head>
 <body>
   <div id="app">
     <header class="topbar">
-      <div class="brand">🗡️ Rune-like Starter</div>
-      <div class="right">
-        <span id="statusPill" class="pill">Offline</span>
-        <button id="btnSignOut" class="btn ghost" hidden>Sign out</button>
+      <div class="brand">
+        <div class="logo"></div>
+        <div class="brandText">
+          <div class="brandTitle">Rune‑Like</div>
+          <div class="brandSub">2D MMO starter • GitHub Pages + Supabase</div>
+        </div>
+      </div>
+      <div class="topbarRight">
+        <button id="btnLogout" class="btn ghost" title="Sign out">Logout</button>
       </div>
     </header>
 
-    <main class="main">
-      <!-- AUTH -->
-      <section id="viewAuth" class="card">
-        <h1>Sign in</h1>
-        <p class="muted">GitHub Pages + Supabase Auth. Username/password for now.</p>
+    <main id="screenAuth" class="screen">
+      <div class="authCard">
+        <div class="authTabs">
+          <button id="tabLogin" class="tab active">Login</button>
+          <button id="tabSignup" class="tab">Create Account</button>
+        </div>
 
-        <div class="grid2">
-          <label>
-            <span>Username</span>
-            <input id="authUsername" type="text" autocomplete="username" placeholder="yourname" />
-          </label>
-          <label>
-            <span>Password</span>
+        <div class="authBody">
+          <div class="field">
+            <label>Username</label>
+            <input id="authUsername" autocomplete="username" spellcheck="false" maxlength="16" placeholder="e.g. ian123" />
+            <div class="hint">3–16 chars. Letters, numbers, underscore.</div>
+          </div>
+          <div class="field">
+            <label>Password</label>
             <input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••••" />
-          </label>
-        </div>
+            <div class="hint">6+ characters.</div>
+          </div>
 
-        <div class="row">
-          <button id="btnLogin" class="btn primary">Log in</button>
-          <button id="btnSignup" class="btn">Create account</button>
-        </div>
-
-        <details class="details">
-          <summary>Supabase config (required)</summary>
-          <p class="muted">
-            Open <code>app.js</code> and set <code>SUPABASE_URL</code> + <code>SUPABASE_ANON_KEY</code>.
-            In Supabase Auth settings, add your GitHub Pages URL to <b>Site URL</b> and <b>Additional Redirect URLs</b>.
-          </p>
-        </details>
-
-        <div id="authError" class="error" hidden></div>
-      </section>
-
-      <!-- CHARACTER CREATE -->
-      <section id="viewCharacter" class="card" hidden>
-        <h1>Create your character</h1>
-        <p class="muted">This creates a profile record tied to your Supabase user.</p>
-
-        <div class="grid2">
-          <label>
-            <span>Character name</span>
-            <input id="charName" type="text" maxlength="20" placeholder="e.g., Donkatsu" />
-            <small class="muted">3–20 chars. Letters, numbers, spaces, underscores.</small>
-          </label>
-
-          <label>
-            <span>Outfit color</span>
-            <input id="charColor" type="color" value="#3aa3ff" />
-          </label>
-        </div>
-
-        <div class="row">
-          <button id="btnCreateCharacter" class="btn primary">Create character</button>
-          <button id="btnBackToAuth" class="btn ghost">Back</button>
-        </div>
-
-        <div id="charError" class="error" hidden></div>
-      </section>
-
-      <!-- GAME -->
-      <section id="viewGame" class="game" hidden>
-        <div class="gameWrap">
-          <canvas id="gameCanvas" width="960" height="540"></canvas>
-
-          <aside class="panel">
-            <div class="panelHead">
-              <div>
-                <div class="panelTitle">Chat</div>
-                <div id="whoami" class="muted small"></div>
-              </div>
-              <button id="btnReconnectChat" class="btn ghost smallbtn" title="Reconnect realtime">↻</button>
+          <div id="signupExtras" class="signupExtras hidden">
+            <div class="field">
+              <label>Character name</label>
+              <input id="charName" maxlength="16" placeholder="Shown in-game" />
             </div>
 
-            <div id="chatLog" class="chatLog" aria-live="polite"></div>
-
-            <form id="chatForm" class="chatForm" autocomplete="off">
-              <input id="chatInput" type="text" maxlength="200" placeholder="Type message… (Enter to send)" />
-              <button class="btn primary smallbtn" type="submit">Send</button>
-            </form>
-
-            <div class="muted tiny">
-              Tip: This uses Supabase Realtime <b>Broadcast</b> (no DB table needed).
+            <div class="field">
+              <label>Style</label>
+              <div class="styleGrid" id="styleGrid"></div>
+              <div class="hint">Pick a style—more customization coming next.</div>
             </div>
-          </aside>
+          </div>
+
+          <div class="actions">
+            <button id="btnPrimary" class="btn primary">Login</button>
+            <button id="btnGuest" class="btn">Enter Offline (No Supabase)</button>
+          </div>
+
+          <div id="authMsg" class="msg"></div>
         </div>
-      </section>
+
+        <div class="footnote">
+          Tip: if GitHub Pages caches old files, hard refresh (Ctrl+Shift+R).
+        </div>
+      </div>
     </main>
 
-    <footer class="footer muted">
-      RuneScape-inspired starter (original code/assets). Not affiliated with Jagex.
-    </footer>
+    <main id="screenGame" class="screen hidden">
+      <div class="gameRoot">
+        <canvas id="game" width="1280" height="720"></canvas>
+
+        <div class="hud">
+          <div class="hudLeft">
+            <div class="panel pTop" id="panelStats">
+              <div class="panelTitle">Adventurer</div>
+              <div class="statsRow">
+                <div class="stat">
+                  <div class="statLabel">HP</div>
+                  <div class="bar"><div id="hpBar" class="barFill"></div></div>
+                </div>
+                <div class="stat">
+                  <div class="statLabel">Stam</div>
+                  <div class="bar"><div id="stamBar" class="barFill"></div></div>
+                </div>
+              </div>
+              <div class="tiny" id="whereText">Loading…</div>
+            </div>
+
+            <div class="panel pBottom" id="panelChat">
+              <div class="panelTitleRow">
+                <div class="panelTitle">Chat</div>
+                <div class="pill" id="worldPill">World: Lobby</div>
+              </div>
+              <div id="chatLog" class="chatLog"></div>
+              <div class="chatInputRow">
+                <input id="chatInput" maxlength="200" placeholder="Press Enter to chat…" />
+                <button id="chatSend" class="btn small">Send</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="hudRight">
+            <div class="panel pMinimap" id="panelMinimap">
+              <div class="panelTitleRow">
+                <div class="panelTitle">Map</div>
+                <div class="tiny" id="fpsText">— fps</div>
+              </div>
+              <canvas id="minimap" width="180" height="180"></canvas>
+              <div class="miniRow">
+                <button id="btnZoomIn" class="btn small ghost">+</button>
+                <button id="btnZoomOut" class="btn small ghost">−</button>
+                <button id="btnCenter" class="btn small">Center</button>
+              </div>
+            </div>
+
+            <div class="panel pInv" id="panelInv">
+              <div class="panelTitleRow">
+                <div class="panelTitle">Inventory</div>
+                <div class="tiny">WIP</div>
+              </div>
+              <div class="invGrid" id="invGrid"></div>
+              <div class="tiny">Soon: skills, equipment, banking, crafting.</div>
+            </div>
+
+            <div class="panel pHelp" id="panelHelp">
+              <div class="panelTitle">Controls</div>
+              <div class="tiny">
+                • Click: move<br/>
+                • WASD: nudge<br/>
+                • Mouse wheel: zoom<br/>
+                • Enter: chat<br/>
+                • M: toggle minimap<br/>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="toast" id="toast"></div>
+      </div>
+    </main>
   </div>
 
-  <script type="module" src="./app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="./app.js?v=20251219-2"></script>
 </body>
 </html>

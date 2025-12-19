@@ -1,0 +1,13 @@
+{
+  "tileSize": 32,
+  "atlasCols": 45,
+  "atlasRows": 30,
+  "chunkTiles": 128,
+  "worldTiles": 10800,
+  "spawn": {
+    "x": 5400,
+    "y": 5400
+  },
+  "defaultTile": "water",
+  "version": 1
+}
