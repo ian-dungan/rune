@@ -171,17 +171,27 @@ export class Game{
   _drawChunkSync(cx,cy){
     const kk=k(cx,cy);
     if(!this.cache.has(kk)){
-      // Load async in background, draw default for now
       this._chunk(cx,cy);
       return;
     }
     const ch=this.cache.get(kk);
     const bx=cx*CHUNK*TILE, by=cy*CHUNK*TILE;
+    
+    // Ground layers (order matters!)
+    if(ch.layers.ground_water) this._drawLayer(ch.layers.ground_water,bx,by,false);
+    if(ch.layers.ground_dirt) this._drawLayer(ch.layers.ground_dirt,bx,by,false);
     if(ch.layers.ground_grass) this._drawLayer(ch.layers.ground_grass,bx,by,false);
     if(ch.layers.ground_stone) this._drawLayer(ch.layers.ground_stone,bx,by,false);
     if(ch.layers.ground) this._drawLayer(ch.layers.ground,bx,by,false);
+    
+    // Shadows
     this._drawLayer(ch.layers.shadows,bx,by,true);
+    
+    // Objects and decorations (order: structures, decorations, trees, objects on top)
     if(ch.layers.structures) this._drawLayer(ch.layers.structures,bx,by,false);
+    if(ch.layers.decorations) this._drawLayer(ch.layers.decorations,bx,by,false);
+    if(ch.layers.trees) this._drawLayer(ch.layers.trees,bx,by,false);
+    if(ch.layers.props) this._drawLayer(ch.layers.props,bx,by,false);
     this._drawLayer(ch.layers.objects,bx,by,false);
   }
 
@@ -252,7 +262,7 @@ export class Game{
     m.clearRect(0,0,w,h);
     
     // Draw actual world terrain on minimap
-    const zoom=0.15; // Show more area
+    const zoom=0.15;
     const centerX=this.player.x, centerY=this.player.y;
     const viewW=w/zoom, viewH=h/zoom;
     
@@ -283,26 +293,38 @@ export class Game{
             
             const idx=ty*CHUNK+tx;
             
-            // Check layers for color
+            // Check layers for color (priority order)
             let color="#7a9639"; // default grass
             
-            // Structures (rocks/mountains)
-            if(ch.layers.structures?.data[idx]>=0){
-              color="#6b6b5a"; // gray for rocks
+            // Water (blue)
+            if(ch.layers.ground_water?.data[idx]>=0){
+              color="#4a90d9"; // blue for water
             }
-            // Objects (trees, bushes)
-            else if(ch.layers.objects?.data[idx]>=0){
-              const tid = ch.layers.objects.data[idx];
-              if(tid <= 2) color="#4a5b1e"; // dark green for trees
-              else color="#6a7a2e"; // medium green for bushes
+            // Dirt/sand (tan)
+            else if(ch.layers.ground_dirt?.data[idx]>=0){
+              color="#c9a875"; // tan for sand/dirt
             }
-            // Stone ground (wasteland, rocky areas)
-            else if(ch.layers.ground_stone?.data[idx]>=0){
-              color="#8b8b7a"; // tan/gray for stone
-            }
-            // Grass
+            // Grass (green)
             else if(ch.layers.ground_grass?.data[idx]>=0){
               color="#7a9639"; // green for grass
+            }
+            // Stone (gray)
+            else if(ch.layers.ground_stone?.data[idx]>=0){
+              color="#8b8b7a"; // gray for stone
+            }
+            
+            // Objects overlay darker
+            if(ch.layers.trees?.data[idx]>=0 || ch.layers.objects?.data[idx]>=0){
+              // Darken the color for forests
+              const r = parseInt(color.slice(1,3), 16);
+              const g = parseInt(color.slice(3,5), 16);
+              const b = parseInt(color.slice(5,7), 16);
+              color = `#${Math.max(0,r-30).toString(16).padStart(2,'0')}${Math.max(0,g-30).toString(16).padStart(2,'0')}${Math.max(0,b-30).toString(16).padStart(2,'0')}`;
+            }
+            
+            // Structures (darker gray)
+            if(ch.layers.structures?.data[idx]>=0){
+              color="#5a5a4a";
             }
             
             const size=Math.ceil(zoom*TILE);
