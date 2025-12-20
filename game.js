@@ -83,7 +83,7 @@ export class Game{
       if(dist<6) this._target=null; else {tx=dx/dist; ty=dy/dist;}
     }
     const mx=ax||tx, my=ay||ty; const len=Math.hypot(mx,my)||1;
-    const sp=120;
+    const sp=210;
     this.player.x += (mx/len)*sp*dt; this.player.y += (my/len)*sp*dt;
     this.cam.x += (this.player.x-this.cam.x)*0.12; this.cam.y += (this.player.y-this.cam.y)*0.12;
     const moving=(Math.abs(mx)+Math.abs(my))>0.01;
@@ -123,25 +123,35 @@ export class Game{
           }
           this.regions.set(regionKey, true);
           console.log(`Loaded region ${regionKey} (${chunks.length} chunks)`);
+        } else {
+          console.warn(`Region ${regionKey} not found (${res.status})`);
+          this.regions.set(regionKey, false);
         }
       }catch(err){
-        console.warn(`Region ${regionKey} not found, using fallback`);
+        console.error(`Error loading region ${regionKey}:`, err);
         this.regions.set(regionKey, false);
       }
     }
     
-    // Return chunk if now cached, otherwise fallback
+    // Return chunk if now cached
     if(this.cache.has(kk)) return this.cache.get(kk);
     
-    // Fallback for missing chunks
-    const fill=new Array(CHUNK*CHUNK).fill(this.meta.defaultFill.tile);
+    // Fallback: create grass chunk
+    console.warn(`Using fallback for chunk (${cx},${cy})`);
+    const grassTiles = [];
+    for(let i=0; i<CHUNK*CHUNK; i++) grassTiles.push(Math.floor(Math.random()*8));
+    
     return {
       cx,cy,
       layers:{
-        ground_grass:{tileset:"grass",data:fill},
-        ground_stone:{tileset:"stone",data:new Array(CHUNK*CHUNK).fill(-1)},
+        ground_grass:{tileset:"grass1",data:grassTiles},
+        ground_water:{tileset:"water1",data:new Array(CHUNK*CHUNK).fill(-1)},
+        ground_dirt:{tileset:"dirt1",data:new Array(CHUNK*CHUNK).fill(-1)},
         shadows:{tileset:"shadowPlant",data:new Array(CHUNK*CHUNK).fill(-1)},
-        objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)}
+        objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)},
+        decorations:{tileset:"flowers",data:new Array(CHUNK*CHUNK).fill(-1)},
+        structures:{tileset:"wall",data:new Array(CHUNK*CHUNK).fill(-1)},
+        trees:{tileset:"lpcTreetop",data:new Array(CHUNK*CHUNK).fill(-1)}
       }
     };
   }
