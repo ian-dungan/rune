@@ -49,7 +49,7 @@ export class Game{
       }
       
       // Load new player sprite
-      this.images.player=await loadImage("./assets/player_sprite.png");
+      this.images.player=await loadImage("./player_sprite.png");
       
       console.log("Assets loaded. Player sprite ready.");
       showToast("Loaded sprite tiles + static world.");
