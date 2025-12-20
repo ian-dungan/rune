@@ -9,7 +9,7 @@ export class Game{
     this.canvas=canvas; this.ctx=canvas.getContext("2d",{alpha:false});
     this.minimap=minimap; this.mctx=minimap.getContext("2d",{alpha:true});
     this.onStatus=onStatus||(()=>{}); this.onFps=onFps||(()=>{});
-    this.player={x:(2*CHUNK+16)*TILE,y:(2*CHUNK+16)*TILE,name:"Player",frame:0,ft:0};
+    this.player={x:(2*CHUNK+16)*TILE,y:(2*CHUNK+16)*TILE,name:"Player",frame:0,ft:0,dir:"down",moving:false};
     this.cam={x:this.player.x,y:this.player.y,zoom:2.35};
     this._keys=new Set(); this._target=null;
     this.tilesets=null; this.images={}; this.meta=null; this.cache=new Map();
@@ -42,13 +42,16 @@ export class Game{
     try{
       this.meta=await (await fetch("./assets/world/overworld/meta.json")).json();
       this.tilesets=await (await fetch("./assets/world/overworld/tilesets.json")).json();
-      console.log("Tilesets loaded. Player cols:",this.tilesets.tilesets.player.cols,"Plant cols:",this.tilesets.tilesets.plant.cols);
       
       for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
+        if(name==='player') continue; // Skip old player sprite
         this.images[name]=await loadImage("./"+ts.src);
       }
       
-      console.log("All assets loaded. Player image:",this.images.player.width+"x"+this.images.player.height);
+      // Load new player sprite
+      this.images.player=await loadImage("./assets/player_sprite.png");
+      
+      console.log("Assets loaded. Player sprite ready.");
       showToast("Loaded sprite tiles + static world.");
     }catch(err){
       console.error("Failed to load world:",err);
@@ -80,7 +83,18 @@ export class Game{
     this.player.x += (mx/len)*sp*dt; this.player.y += (my/len)*sp*dt;
     this.cam.x += (this.player.x-this.cam.x)*0.12; this.cam.y += (this.player.y-this.cam.y)*0.12;
     const moving=(Math.abs(mx)+Math.abs(my))>0.01;
-    this.player.ft += dt*(moving?10:2); this.player.frame=Math.floor(this.player.ft)%4;
+    this.player.moving=moving;
+    
+    // Update direction based on movement
+    if(moving){
+      if(Math.abs(mx)>Math.abs(my)){
+        this.player.dir=mx>0?"right":"left";
+      }else{
+        this.player.dir=my>0?"down":"up";
+      }
+    }
+    
+    this.player.ft += dt*(moving?10:2); this.player.frame=Math.floor(this.player.ft)%8;
     this.onStatus(`Pos: ${Math.floor(this.player.x)}, ${Math.floor(this.player.y)} • Zoom: ${this.cam.zoom.toFixed(2)}x`);
   }
 
@@ -126,27 +140,13 @@ export class Game{
     const tsName=layer.tileset;
     const ts=this.tilesets.tilesets[tsName]||this.tilesets.tilesets.grass;
     const img=this.images[tsName]||this.images.grass;
-    
-    // TEMP: Draw plant spritesheet for debug
-    if(!this._plantDebugShown && tsName==='plant' && img){
-      console.log("Drawing plant sprite sheet at 200,50 for debug");
-      this.ctx.drawImage(img, 200, 50, img.width/2, img.height/2);
-      this._plantDebugShown=true;
-    }
-    
     const cols=ts.cols; const data=layer.data; const z=this.cam.zoom;
+    
     for(let i=0;i<data.length;i++){
       const tid=data[i]; if(tid===-1||tid==null) continue;
       const tx=i%CHUNK, ty=Math.floor(i/CHUNK);
       const wx=bx+tx*TILE, wy=by+ty*TILE;
       const s=this._w2s(wx,wy); const r=srcRect(tid,cols);
-      
-      // DEBUG: Log first few plant draws
-      if(!this._plantDrawLog && tsName==='plant'){
-        console.log(`Drawing plant tile ${tid} at srcRect:`,r);
-        this._plantDrawLog = true;
-      }
-      
       this.ctx.drawImage(img,r.x,r.y,r.w,r.h,s.x,s.y,TILE*z,TILE*z);
     }
   }
@@ -155,15 +155,13 @@ export class Game{
     const z=this.cam.zoom, p=this.player, c=this.ctx;
     const s=this._w2s(p.x,p.y);
 
-    // shadow (always draw)
+    // shadow
     c.fillStyle="rgba(0,0,0,0.35)";
     c.beginPath(); c.ellipse(s.x,s.y+18*z,10*z,5*z,0,0,Math.PI*2); c.fill();
 
     const img=this.images.player;
-    const ts=this.tilesets?.tilesets?.player;
-    
-    // fallback if no image
-    if(!img || !ts){
+    if(!img){
+      // Fallback rectangle
       c.fillStyle="#58b2ff";
       c.fillRect(s.x-6*z,s.y-18*z,12*z,18*z);
       c.font=`${Math.floor(12*z)}px system-ui`;
@@ -173,24 +171,31 @@ export class Game{
       return;
     }
 
-    // TEMP: Just draw the entire sprite sheet scaled down to see what we have
-    if(!this._spriteDebugShown){
-      console.log("Drawing entire player sprite at 50,50 for debug");
-      c.drawImage(img, 50, 50, img.width, img.height);
-      this._spriteDebugShown = true;
-    }
-
-    // Try drawing just tile 0 at full size first
-    const w=TILE*z, h=TILE*z;
-    c.drawImage(img, 0, 0, 32, 32, s.x-w/2, s.y-h, w, h);
+    // Sprite sheet layout: 16 cols (96px each) x 4 rows (80px each)
+    // Row: 0=down, 1=left, 2=right, 3=up
+    // Cols: 0-7=idle, 8-15=run
+    const SPRITE_W=96, SPRITE_H=80;
+    const dirRow={down:0,left:1,right:2,up:3};
+    const row=dirRow[p.dir]||0;
+    const col=(p.moving?8:0)+p.frame;
+    
+    const sx=col*SPRITE_W;
+    const sy=row*SPRITE_H;
+    
+    // Draw sprite scaled to match world (sprite is 96x80, scale to ~32x32 equivalent)
+    const scale=0.4; // Scale down the large sprites
+    const w=SPRITE_W*scale*z;
+    const h=SPRITE_H*scale*z;
+    
+    c.drawImage(img, sx, sy, SPRITE_W, SPRITE_H, s.x-w/2, s.y-h, w, h);
 
     // nameplate
     c.font=`${Math.floor(12*z)}px system-ui`;
     c.textAlign="center";
     c.fillStyle="rgba(0,0,0,0.6)";
-    c.fillText(p.name, s.x+1, s.y-16*z+1);
+    c.fillText(p.name, s.x+1, s.y-h-4*z+1);
     c.fillStyle="#d6b35f";
-    c.fillText(p.name, s.x, s.y-16*z);
+    c.fillText(p.name, s.x, s.y-h-4*z);
   }
 
   _drawMinimap(){
