@@ -1,7 +1,7 @@
 import { clamp, showToast } from "./util.js";
 const TILE=32, CHUNK=32;
 function k(cx,cy){return `${cx},${cy}`;}
-async function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>{console.log("✓ Loaded:",src);res(i);};i.onerror=()=>{console.error("✗ Failed:",src);rej(new Error("img "+src));};i.src=src;});}
+async function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>{console.error("Failed to load:",src);rej(new Error("img "+src));};i.src=src;});}
 function srcRect(idx,cols){return {x:(idx%cols)*TILE,y:Math.floor(idx/cols)*TILE,w:TILE,h:TILE};}
 
 export class Game{
@@ -40,22 +40,15 @@ export class Game{
 
   async loadStaticWorld(){
     try{
-      console.log("Loading meta.json...");
       this.meta=await (await fetch("./assets/world/overworld/meta.json")).json();
-      console.log("Meta loaded:",this.meta);
-      
-      console.log("Loading tilesets.json...");
       this.tilesets=await (await fetch("./assets/world/overworld/tilesets.json")).json();
-      console.log("Tilesets config:",Object.keys(this.tilesets.tilesets||{}));
-      console.log("Full tilesets.json:",JSON.stringify(this.tilesets,null,2));
+      console.log("Tilesets loaded. Player cols:",this.tilesets.tilesets.player.cols,"Plant cols:",this.tilesets.tilesets.plant.cols);
       
       for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
-        const path="./"+ts.src;
-        console.log(`Loading ${name} from ${path}...`);
-        this.images[name]=await loadImage(path);
+        this.images[name]=await loadImage("./"+ts.src);
       }
       
-      console.log("All assets loaded successfully!");
+      console.log("All assets loaded. Player image:",this.images.player.width+"x"+this.images.player.height);
       showToast("Loaded sprite tiles + static world.");
     }catch(err){
       console.error("Failed to load world:",err);
@@ -134,16 +127,11 @@ export class Game{
     const ts=this.tilesets.tilesets[tsName]||this.tilesets.tilesets.grass;
     const img=this.images[tsName]||this.images.grass;
     
-    if(!this._layerLogged && tsName==='plant'){
-      console.log("Plant layer debug:",{
-        tsName,
-        hasTileset:!!ts,
-        hasImage:!!img,
-        imageSize:img?`${img.width}x${img.height}`:'N/A',
-        cols:ts?.cols,
-        sampleData:layer.data.slice(0,10)
-      });
-      this._layerLogged=true;
+    // TEMP: Draw plant spritesheet for debug
+    if(!this._plantDebugShown && tsName==='plant' && img){
+      console.log("Drawing plant sprite sheet at 200,50 for debug");
+      this.ctx.drawImage(img, 200, 50, img.width/2, img.height/2);
+      this._plantDebugShown=true;
     }
     
     const cols=ts.cols; const data=layer.data; const z=this.cam.zoom;
@@ -152,6 +140,13 @@ export class Game{
       const tx=i%CHUNK, ty=Math.floor(i/CHUNK);
       const wx=bx+tx*TILE, wy=by+ty*TILE;
       const s=this._w2s(wx,wy); const r=srcRect(tid,cols);
+      
+      // DEBUG: Log first few plant draws
+      if(!this._plantDrawLog && tsName==='plant'){
+        console.log(`Drawing plant tile ${tid} at srcRect:`,r);
+        this._plantDrawLog = true;
+      }
+      
       this.ctx.drawImage(img,r.x,r.y,r.w,r.h,s.x,s.y,TILE*z,TILE*z);
     }
   }
@@ -167,21 +162,8 @@ export class Game{
     const img=this.images.player;
     const ts=this.tilesets?.tilesets?.player;
     
-    // DEBUG
-    if(!this._logged){
-      console.log("Player sprite debug:",{
-        hasImage:!!img,
-        imageSize:img?`${img.width}x${img.height}`:'N/A',
-        tileset:ts,
-        cols:ts?.cols,
-        frame:p.frame
-      });
-      this._logged=true;
-    }
-    
-    // fallback if assets missing
+    // fallback if no image
     if(!img || !ts){
-      console.warn("Player sprite missing:",{img:!!img,ts:!!ts});
       c.fillStyle="#58b2ff";
       c.fillRect(s.x-6*z,s.y-18*z,12*z,18*z);
       c.font=`${Math.floor(12*z)}px system-ui`;
@@ -191,32 +173,24 @@ export class Game{
       return;
     }
 
-    const cols=ts.cols||4;
-    // Simple idle animation: frame 0-3 for legs, frame 4-7 for upper body
-    const frameIdx=p.frame%4; // cycle 0-3
-    const lower = frameIdx;
-    const upper = frameIdx + cols;
-
-    const rL=srcRect(lower, cols);
-    const rU=srcRect(upper, cols);
-
-    // DEBUG first few frames
-    if(p.frame < 3){
-      console.log(`Frame ${p.frame}:`,{lower,upper,rL,rU,cols});
+    // TEMP: Just draw the entire sprite sheet scaled down to see what we have
+    if(!this._spriteDebugShown){
+      console.log("Drawing entire player sprite at 50,50 for debug");
+      c.drawImage(img, 50, 50, img.width, img.height);
+      this._spriteDebugShown = true;
     }
 
-    // draw sprite (upper then lower for 32x64 total)
+    // Try drawing just tile 0 at full size first
     const w=TILE*z, h=TILE*z;
-    c.drawImage(img, rU.x,rU.y,rU.w,rU.h, s.x-w/2, s.y-2*h, w,h);
-    c.drawImage(img, rL.x,rL.y,rL.w,rL.h, s.x-w/2, s.y-h, w,h);
+    c.drawImage(img, 0, 0, 32, 32, s.x-w/2, s.y-h, w, h);
 
     // nameplate
     c.font=`${Math.floor(12*z)}px system-ui`;
     c.textAlign="center";
     c.fillStyle="rgba(0,0,0,0.6)";
-    c.fillText(p.name, s.x+1, s.y-2*TILE*z-8*z+1);
+    c.fillText(p.name, s.x+1, s.y-16*z+1);
     c.fillStyle="#d6b35f";
-    c.fillText(p.name, s.x, s.y-2*TILE*z-8*z);
+    c.fillText(p.name, s.x, s.y-16*z);
   }
 
   _drawMinimap(){
