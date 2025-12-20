@@ -1,123 +1,316 @@
 {
-  "tileSize": 32,
   "tilesets": {
     "grass": {
       "src": "assets/tiles/TX Tileset Grass.png",
-      "cols": 8,
-      "rows": 8
+      "cols": 8
     },
     "stone": {
       "src": "assets/tiles/TX Tileset Stone Ground.png",
-      "cols": 8,
-      "rows": 8
+      "cols": 8
     },
     "plant": {
       "src": "assets/tiles/TX Plant.png",
-      "cols": 16,
-      "rows": 16
+      "cols": 16
     },
     "shadowPlant": {
       "src": "assets/tiles/TX Shadow Plant.png",
-      "cols": 16,
-      "rows": 16
-    },
-    "props": {
-      "src": "assets/tiles/TX Props.png",
-      "cols": 16,
-      "rows": 16
+      "cols": 16
     },
     "wall": {
       "src": "assets/tiles/TX Tileset Wall.png",
-      "cols": 16,
-      "rows": 16
+      "cols": 16
     },
-    "struct": {
-      "src": "assets/tiles/TX Struct.png",
-      "cols": 16,
-      "rows": 16
+    "props": {
+      "src": "assets/tiles/TX Props.png",
+      "cols": 16
     },
-    "shadow": {
-      "src": "assets/tiles/TX Shadow.png",
-      "cols": 16,
-      "rows": 16
+    "water1": {
+      "src": "assets/tiles/[A]Water1_pipo.png",
+      "cols": 8
     },
-    "player": {
-      "src": "assets/tiles/TX Player.png",
-      "cols": 4,
-      "rows": 4
-    }
-  },
-  "palette": {
-    "grass": {
-      "set": "grass",
-      "candidates": [
-        0,
-        1,
-        2,
-        3,
-        4
-      ]
+    "water2": {
+      "src": "assets/tiles/[A]Water2_pipo.png",
+      "cols": 8
     },
-    "path": {
-      "set": "stone",
-      "candidates": [
-        0,
-        1,
-        2,
-        3,
-        4
-      ]
+    "water3": {
+      "src": "assets/tiles/[A]Water3_pipo.png",
+      "cols": 8
     },
-    "tree": {
-      "set": "plant",
-      "candidates": [
-        2,
-        6,
-        17,
-        18,
-        19,
-        21
-      ]
+    "water4": {
+      "src": "assets/tiles/[A]Water4_pipo.png",
+      "cols": 8
     },
-    "treeShadow": {
-      "set": "shadowPlant",
-      "candidates": [
-        49,
-        50,
-        51,
-        53,
-        54,
-        55
-      ]
+    "water5": {
+      "src": "assets/tiles/[A]Water5_pipo.png",
+      "cols": 8
     },
-    "player": {
-      "set": "player",
-      "frames": [
-        0,
-        1,
-        2,
-        4,
-        5,
-        6
-      ]
+    "water6": {
+      "src": "assets/tiles/[A]Water6_pipo.png",
+      "cols": 8
     },
-    "bush": {
-      "set": "plant",
-      "candidates": [
-        96,
-        98,
-        99,
-        100
-      ]
+    "water7": {
+      "src": "assets/tiles/[A]Water7_pipo.png",
+      "cols": 8
     },
-    "bushShadow": {
-      "set": "shadowPlant",
-      "candidates": [
-        64,
-        65,
-        66,
-        67
-      ]
+    "waterCave": {
+      "src": "assets/tiles/[A]Water3_Cave1_pipo.png",
+      "cols": 8
+    },
+    "waterfall1": {
+      "src": "assets/tiles/[A]WaterFall1_pipo.png",
+      "cols": 8
+    },
+    "waterfall2": {
+      "src": "assets/tiles/[A]WaterFall2_pipo.png",
+      "cols": 8
+    },
+    "waterfall3": {
+      "src": "assets/tiles/[A]WaterFall3_pipo.png",
+      "cols": 8
+    },
+    "grass1": {
+      "src": "assets/tiles/[A]Grass1_pipo.png",
+      "cols": 8
+    },
+    "grass2": {
+      "src": "assets/tiles/[A]Grass2_pipo.png",
+      "cols": 8
+    },
+    "grass3": {
+      "src": "assets/tiles/[A]Grass3_pipo.png",
+      "cols": 8
+    },
+    "grass4": {
+      "src": "assets/tiles/[A]Grass4_pipo.png",
+      "cols": 8
+    },
+    "dirt1": {
+      "src": "assets/tiles/[A]Dirt1_pipo.png",
+      "cols": 8
+    },
+    "dirt2": {
+      "src": "assets/tiles/[A]Dirt2_pipo.png",
+      "cols": 8
+    },
+    "dirt3": {
+      "src": "assets/tiles/[A]Dirt3_pipo.png",
+      "cols": 8
+    },
+    "dirt4": {
+      "src": "assets/tiles/[A]Dirt4_pipo.png",
+      "cols": 8
+    },
+    "trans_g1d1": {
+      "src": "assets/tiles/[A]Grass1-Dirt1_pipo.png",
+      "cols": 8
+    },
+    "trans_g1d2": {
+      "src": "assets/tiles/[A]Grass1-Dirt2_pipo.png",
+      "cols": 8
+    },
+    "trans_g1d3": {
+      "src": "assets/tiles/[A]Grass1-Dirt3_pipo.png",
+      "cols": 8
+    },
+    "trans_g1d4": {
+      "src": "assets/tiles/[A]Grass1-Dirt4_pipo.png",
+      "cols": 8
+    },
+    "trans_g1g2": {
+      "src": "assets/tiles/[A]Grass1-Grass2_pipo.png",
+      "cols": 8
+    },
+    "trans_g1g3": {
+      "src": "assets/tiles/[A]Grass1-Grass3_pipo.png",
+      "cols": 8
+    },
+    "trans_g1g4": {
+      "src": "assets/tiles/[A]Grass1-Grass4_pipo.png",
+      "cols": 8
+    },
+    "trans_d1d2": {
+      "src": "assets/tiles/[A]Dirt1-Dirt2_pipo.png",
+      "cols": 8
+    },
+    "trans_d1d3": {
+      "src": "assets/tiles/[A]Dirt1-Dirt3_pipo.png",
+      "cols": 8
+    },
+    "trans_d1d4": {
+      "src": "assets/tiles/[A]Dirt1-Dirt4_pipo.png",
+      "cols": 8
+    },
+    "flowers": {
+      "src": "assets/tiles/[A]Flower_pipo.png",
+      "cols": 8
+    },
+    "longGrass": {
+      "src": "assets/tiles/[A]LongGrass_pipo.png",
+      "cols": 8
+    },
+    "wallUp1": {
+      "src": "assets/tiles/[A]Wall-Up1_pipo.png",
+      "cols": 8
+    },
+    "wallUp2": {
+      "src": "assets/tiles/[A]Wall-Up2_pipo.png",
+      "cols": 8
+    },
+    "baseChip": {
+      "src": "assets/tiles/[Base]BaseChip_pipo.png",
+      "cols": 8
+    },
+    "lightShadow": {
+      "src": "assets/tiles/LightShadow_pipo.png",
+      "cols": 8
+    },
+    "lpcGrass": {
+      "src": "assets/tiles/grass.png",
+      "cols": 8
+    },
+    "lpcGrassAlt": {
+      "src": "assets/tiles/grassalt.png",
+      "cols": 8
+    },
+    "lpcWaterGrass": {
+      "src": "assets/tiles/watergrass.png",
+      "cols": 8
+    },
+    "lpcDirt": {
+      "src": "assets/tiles/dirt.png",
+      "cols": 8
+    },
+    "lpcDirt2": {
+      "src": "assets/tiles/dirt2.png",
+      "cols": 8
+    },
+    "lpcWater": {
+      "src": "assets/tiles/water.png",
+      "cols": 8
+    },
+    "lpcBrackish": {
+      "src": "assets/tiles/brackish.png",
+      "cols": 8
+    },
+    "lpcMountains": {
+      "src": "assets/tiles/mountains.png",
+      "cols": 8
+    },
+    "lpcRock": {
+      "src": "assets/tiles/rock.png",
+      "cols": 8
+    },
+    "lpcLava": {
+      "src": "assets/tiles/lava.png",
+      "cols": 8
+    },
+    "lpcLavaRock": {
+      "src": "assets/tiles/lavarock.png",
+      "cols": 8
+    },
+    "lpcCement": {
+      "src": "assets/tiles/cement.png",
+      "cols": 8
+    },
+    "lpcCountry": {
+      "src": "assets/tiles/country.png",
+      "cols": 8
+    },
+    "lpcHole": {
+      "src": "assets/tiles/hole.png",
+      "cols": 8
+    },
+    "lpcShadow": {
+      "src": "assets/tiles/shadow.png",
+      "cols": 8
+    },
+    "lpcTreetop": {
+      "src": "assets/tiles/treetop.png",
+      "cols": 8
+    },
+    "lpcTrunk": {
+      "src": "assets/tiles/trunk.png",
+      "cols": 8
+    },
+    "lpcWaterfall": {
+      "src": "assets/tiles/waterfall.png",
+      "cols": 8
+    },
+    "lpcHouse": {
+      "src": "assets/tiles/house.png",
+      "cols": 8
+    },
+    "lpcInside": {
+      "src": "assets/tiles/inside.png",
+      "cols": 8
+    },
+    "lpcKitchen": {
+      "src": "assets/tiles/kitchen.png",
+      "cols": 8
+    },
+    "lpcCastleOut": {
+      "src": "assets/tiles/castle_outside.png",
+      "cols": 8
+    },
+    "lpcCastleWalls": {
+      "src": "assets/tiles/castlewalls.png",
+      "cols": 8
+    },
+    "lpcCastleFloors": {
+      "src": "assets/tiles/castlefloors.png",
+      "cols": 8
+    },
+    "lpcCastleFloorsOut": {
+      "src": "assets/tiles/castlefloors_outside.png",
+      "cols": 8
+    },
+    "lpcCastleLights": {
+      "src": "assets/tiles/castle_lightsources.png",
+      "cols": 8
+    },
+    "lpcDungeon": {
+      "src": "assets/tiles/dungeon.png",
+      "cols": 8
+    },
+    "lpcStairs": {
+      "src": "assets/tiles/stairs.png",
+      "cols": 8
+    },
+    "lpcCementStair": {
+      "src": "assets/tiles/cementstair.png",
+      "cols": 8
+    },
+    "lpcBridges": {
+      "src": "assets/tiles/bridges.png",
+      "cols": 8
+    },
+    "lpcBarrel": {
+      "src": "assets/tiles/barrel.png",
+      "cols": 8
+    },
+    "lpcChests": {
+      "src": "assets/tiles/chests.png",
+      "cols": 8
+    },
+    "lpcSigns": {
+      "src": "assets/tiles/signs.png",
+      "cols": 8
+    },
+    "lpcBuckets": {
+      "src": "assets/tiles/buckets.png",
+      "cols": 8
+    },
+    "lpcCabinets": {
+      "src": "assets/tiles/cabinets.png",
+      "cols": 8
+    },
+    "lpcCup": {
+      "src": "assets/tiles/cup.png",
+      "cols": 8
+    },
+    "roguelike": {
+      "src": "assets/tiles/roguelikeSheet_transparent.png",
+      "cols": 57
     }
   }
 }
