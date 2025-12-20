@@ -86,8 +86,7 @@ export class Game{
     this.player.x += (mx/len)*sp*dt; this.player.y += (my/len)*sp*dt;
     this.cam.x += (this.player.x-this.cam.x)*0.12; this.cam.y += (this.player.y-this.cam.y)*0.12;
     const moving=(Math.abs(mx)+Math.abs(my))>0.01;
-    const frames=this.tilesets?.palette?.player?.frames?.length||1;
-    this.player.ft += dt*(moving?10:2); this.player.frame=Math.floor(this.player.ft)%frames;
+    this.player.ft += dt*(moving?10:2); this.player.frame=Math.floor(this.player.ft)%4;
     this.onStatus(`Pos: ${Math.floor(this.player.x)}, ${Math.floor(this.player.y)} • Zoom: ${this.cam.zoom.toFixed(2)}x`);
   }
 
@@ -139,8 +138,7 @@ export class Game{
       const tx=i%CHUNK, ty=Math.floor(i/CHUNK);
       const wx=bx+tx*TILE, wy=by+ty*TILE;
       const s=this._w2s(wx,wy); const r=srcRect(tid,cols);
-      const dx=isShadow?2*z:0, dy=isShadow?3*z:0;
-      this.ctx.drawImage(img,r.x,r.y,r.w,r.h,s.x+dx,s.y+dy,TILE*z,TILE*z);
+      this.ctx.drawImage(img,r.x,r.y,r.w,r.h,s.x,s.y,TILE*z,TILE*z);
     }
   }
 
@@ -154,26 +152,24 @@ export class Game{
 
     const img=this.images.player;
     const ts=this.tilesets?.tilesets?.player;
-    const frames=this.tilesets?.palette?.player?.frames;
     
     // fallback if assets missing
-    if(!img || !ts || !frames || frames.length===0){
-      console.warn("Player sprite not ready:",{img:!!img,ts:!!ts,frames:frames?.length});
+    if(!img || !ts){
+      console.warn("Player sprite missing:",{img:!!img,ts:!!ts});
       c.fillStyle="#58b2ff";
       c.fillRect(s.x-6*z,s.y-18*z,12*z,18*z);
-      // nameplate
       c.font=`${Math.floor(12*z)}px system-ui`;
       c.textAlign="center";
-      c.fillStyle="rgba(0,0,0,0.6)";
-      c.fillText(p.name, s.x+1, s.y-20*z+1);
       c.fillStyle="#d6b35f";
       c.fillText(p.name, s.x, s.y-20*z);
       return;
     }
 
     const cols=ts.cols||4;
-    const lower = frames[p.frame] ?? frames[0] ?? 0;
-    const upper = lower + cols; // next row down
+    // Simple idle animation: frame 0-3 for legs, frame 4-7 for upper body
+    const frameIdx=p.frame%4; // cycle 0-3
+    const lower = frameIdx;
+    const upper = frameIdx + cols;
 
     const rL=srcRect(lower, cols);
     const rU=srcRect(upper, cols);
@@ -182,13 +178,6 @@ export class Game{
     const w=TILE*z, h=TILE*z;
     c.drawImage(img, rU.x,rU.y,rU.w,rU.h, s.x-w/2, s.y-2*h, w,h);
     c.drawImage(img, rL.x,rL.y,rL.w,rL.h, s.x-w/2, s.y-h, w,h);
-
-    // subtle outline
-    c.globalAlpha=0.85;
-    c.strokeStyle="rgba(0,0,0,0.45)";
-    c.lineWidth=Math.max(1, Math.floor(1*z));
-    c.strokeRect(s.x-w/2, s.y-2*h, w, 2*h);
-    c.globalAlpha=1;
 
     // nameplate
     c.font=`${Math.floor(12*z)}px system-ui`;
