@@ -121,12 +121,27 @@ export class Game{
     const left=this.cam.x-halfW,right=this.cam.x+halfW,top=this.cam.y-halfH,bottom=this.cam.y+halfH;
     const tL=Math.floor(left/TILE)-2,tR=Math.floor(right/TILE)+2,tT=Math.floor(top/TILE)-2,tB=Math.floor(bottom/TILE)+2;
     const cL=Math.floor(tL/CHUNK),cR=Math.floor(tR/CHUNK),cT=Math.floor(tT/CHUNK),cB=Math.floor(tB/CHUNK);
-    for(let cy=cT;cy<=cB;cy++) for(let cx=cL;cx<=cR;cx++) this._drawChunk(cx,cy);
-    this._drawPlayer(); this._drawMinimap();
+    
+    // Draw all chunks synchronously (already cached)
+    for(let cy=cT;cy<=cB;cy++){
+      for(let cx=cL;cx<=cR;cx++){
+        this._drawChunkSync(cx,cy);
+      }
+    }
+    
+    // Now draw player on top
+    this._drawPlayer(); 
+    this._drawMinimap();
   }
 
-  async _drawChunk(cx,cy){
-    const ch=await this._chunk(cx,cy);
+  _drawChunkSync(cx,cy){
+    const kk=k(cx,cy);
+    if(!this.cache.has(kk)){
+      // Load async in background, draw default for now
+      this._chunk(cx,cy);
+      return;
+    }
+    const ch=this.cache.get(kk);
     const bx=cx*CHUNK*TILE, by=cy*CHUNK*TILE;
     if(ch.layers.ground_grass) this._drawLayer(ch.layers.ground_grass,bx,by,false);
     if(ch.layers.ground_stone) this._drawLayer(ch.layers.ground_stone,bx,by,false);
@@ -201,9 +216,55 @@ export class Game{
   _drawMinimap(){
     const m=this.mctx,w=this.minimap.width,h=this.minimap.height;
     m.clearRect(0,0,w,h);
-    m.fillStyle="rgba(255,255,255,0.05)";
-    for(let y=0;y<h;y+=12) m.fillRect(0,y,w,1);
-    for(let x=0;x<w;x+=12) m.fillRect(x,0,1,h);
-    m.fillStyle="#fff"; m.fillRect(w/2-1,h/2-1,3,3);
+    
+    // Draw actual world terrain on minimap
+    const zoom=0.25; // Minimap zoom - shows larger area
+    const centerX=this.player.x, centerY=this.player.y;
+    const viewW=w/zoom, viewH=h/zoom;
+    
+    // Calculate visible tile range
+    const tL=Math.floor((centerX-viewW/2)/TILE);
+    const tR=Math.floor((centerX+viewW/2)/TILE);
+    const tT=Math.floor((centerY-viewH/2)/TILE);
+    const tB=Math.floor((centerY+viewH/2)/TILE);
+    
+    const cL=Math.floor(tL/CHUNK), cR=Math.floor(tR/CHUNK);
+    const cT=Math.floor(tT/CHUNK), cB=Math.floor(tB/CHUNK);
+    
+    m.imageSmoothingEnabled=false;
+    
+    // Draw chunks on minimap
+    for(let cy=cT;cy<=cB;cy++){
+      for(let cx=cL;cx<=cR;cx++){
+        const kk=k(cx,cy);
+        if(!this.cache.has(kk)) continue;
+        const ch=this.cache.get(kk);
+        
+        for(let ty=0;ty<CHUNK;ty++){
+          for(let tx=0;tx<CHUNK;tx++){
+            const wx=cx*CHUNK*TILE+tx*TILE;
+            const wy=cy*CHUNK*TILE+ty*TILE;
+            const mx=(wx-centerX+viewW/2)*zoom;
+            const my=(wy-centerY+viewH/2)*zoom;
+            
+            if(mx<0||my<0||mx>=w||my>=h) continue;
+            
+            const idx=ty*CHUNK+tx;
+            // Sample grass layer for color
+            const tid=ch.layers.ground_grass?.data[idx]??0;
+            
+            // Color based on tile
+            if(tid>=0 && tid<=4) m.fillStyle="#7a9639"; // grass
+            else m.fillStyle="#6b8234";
+            
+            m.fillRect(Math.floor(mx),Math.floor(my),Math.max(1,zoom*TILE),Math.max(1,zoom*TILE));
+          }
+        }
+      }
+    }
+    
+    // Draw player position
+    m.fillStyle="#fff";
+    m.fillRect(w/2-2,h/2-2,4,4);
   }
 }
