@@ -181,6 +181,7 @@ export class Game{
     if(ch.layers.ground_stone) this._drawLayer(ch.layers.ground_stone,bx,by,false);
     if(ch.layers.ground) this._drawLayer(ch.layers.ground,bx,by,false);
     this._drawLayer(ch.layers.shadows,bx,by,true);
+    if(ch.layers.structures) this._drawLayer(ch.layers.structures,bx,by,false);
     this._drawLayer(ch.layers.objects,bx,by,false);
   }
 
@@ -285,17 +286,23 @@ export class Game{
             // Check layers for color
             let color="#7a9639"; // default grass
             
-            // Stone paths
-            if(ch.layers.ground_stone?.data[idx]>=0){
-              color="#8b8b7a"; // stone
+            // Structures (rocks/mountains)
+            if(ch.layers.structures?.data[idx]>=0){
+              color="#6b6b5a"; // gray for rocks
             }
-            // Objects (trees, etc)
+            // Objects (trees, bushes)
             else if(ch.layers.objects?.data[idx]>=0){
-              color="#5a6b2e"; // darker for objects
+              const tid = ch.layers.objects.data[idx];
+              if(tid <= 2) color="#4a5b1e"; // dark green for trees
+              else color="#6a7a2e"; // medium green for bushes
             }
-            // Shadows
-            else if(ch.layers.shadows?.data[idx]>=0){
-              color="#6a7a32"; // mid tone for shadows
+            // Stone ground (wasteland, rocky areas)
+            else if(ch.layers.ground_stone?.data[idx]>=0){
+              color="#8b8b7a"; // tan/gray for stone
+            }
+            // Grass
+            else if(ch.layers.ground_grass?.data[idx]>=0){
+              color="#7a9639"; // green for grass
             }
             
             const size=Math.ceil(zoom*TILE);
