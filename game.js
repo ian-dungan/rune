@@ -170,10 +170,6 @@ export class Game{
     const z=this.cam.zoom, p=this.player, c=this.ctx;
     const s=this._w2s(p.x,p.y);
 
-    // shadow
-    c.fillStyle="rgba(0,0,0,0.35)";
-    c.beginPath(); c.ellipse(s.x,s.y+18*z,10*z,5*z,0,0,Math.PI*2); c.fill();
-
     const img=this.images.player;
     if(!img){
       // Fallback rectangle
@@ -197,20 +193,25 @@ export class Game{
     const sx=col*SPRITE_W;
     const sy=row*SPRITE_H;
     
-    // Draw sprite scaled to match world (sprite is 96x80, scale to ~32x32 equivalent)
-    const scale=0.4; // Scale down the large sprites
+    // Scale sprite to world size and position feet on ground
+    const scale=0.5; // Slightly bigger
     const w=SPRITE_W*scale*z;
     const h=SPRITE_H*scale*z;
     
-    c.drawImage(img, sx, sy, SPRITE_W, SPRITE_H, s.x-w/2, s.y-h, w, h);
+    // Draw shadow first
+    c.fillStyle="rgba(0,0,0,0.35)";
+    c.beginPath(); c.ellipse(s.x,s.y+4*z,8*z,4*z,0,0,Math.PI*2); c.fill();
+    
+    // Draw sprite with feet at s.y (player position)
+    c.drawImage(img, sx, sy, SPRITE_W, SPRITE_H, s.x-w/2, s.y-h+8*z, w, h);
 
     // nameplate
     c.font=`${Math.floor(12*z)}px system-ui`;
     c.textAlign="center";
     c.fillStyle="rgba(0,0,0,0.6)";
-    c.fillText(p.name, s.x+1, s.y-h-4*z+1);
+    c.fillText(p.name, s.x+1, s.y-h+4*z);
     c.fillStyle="#d6b35f";
-    c.fillText(p.name, s.x, s.y-h-4*z);
+    c.fillText(p.name, s.x, s.y-h+3*z);
   }
 
   _drawMinimap(){
@@ -218,46 +219,56 @@ export class Game{
     m.clearRect(0,0,w,h);
     
     // Draw actual world terrain on minimap
-    const zoom=0.25; // Minimap zoom - shows larger area
+    const zoom=0.15; // Show more area
     const centerX=this.player.x, centerY=this.player.y;
     const viewW=w/zoom, viewH=h/zoom;
     
-    // Calculate visible tile range
-    const tL=Math.floor((centerX-viewW/2)/TILE);
-    const tR=Math.floor((centerX+viewW/2)/TILE);
-    const tT=Math.floor((centerY-viewH/2)/TILE);
-    const tB=Math.floor((centerY+viewH/2)/TILE);
-    
-    const cL=Math.floor(tL/CHUNK), cR=Math.floor(tR/CHUNK);
-    const cT=Math.floor(tT/CHUNK), cB=Math.floor(tB/CHUNK);
+    // Calculate visible chunk range
+    const cL=Math.floor((centerX-viewW/2)/(CHUNK*TILE));
+    const cR=Math.floor((centerX+viewW/2)/(CHUNK*TILE));
+    const cT=Math.floor((centerY-viewH/2)/(CHUNK*TILE));
+    const cB=Math.floor((centerY+viewH/2)/(CHUNK*TILE));
     
     m.imageSmoothingEnabled=false;
     
-    // Draw chunks on minimap
+    // Draw each cached chunk
     for(let cy=cT;cy<=cB;cy++){
       for(let cx=cL;cx<=cR;cx++){
         const kk=k(cx,cy);
         if(!this.cache.has(kk)) continue;
         const ch=this.cache.get(kk);
         
+        // Sample every tile in chunk for minimap
         for(let ty=0;ty<CHUNK;ty++){
           for(let tx=0;tx<CHUNK;tx++){
             const wx=cx*CHUNK*TILE+tx*TILE;
             const wy=cy*CHUNK*TILE+ty*TILE;
-            const mx=(wx-centerX+viewW/2)*zoom;
-            const my=(wy-centerY+viewH/2)*zoom;
+            const mx=Math.floor((wx-centerX+viewW/2)*zoom);
+            const my=Math.floor((wy-centerY+viewH/2)*zoom);
             
             if(mx<0||my<0||mx>=w||my>=h) continue;
             
             const idx=ty*CHUNK+tx;
-            // Sample grass layer for color
-            const tid=ch.layers.ground_grass?.data[idx]??0;
             
-            // Color based on tile
-            if(tid>=0 && tid<=4) m.fillStyle="#7a9639"; // grass
-            else m.fillStyle="#6b8234";
+            // Check layers for color
+            let color="#7a9639"; // default grass
             
-            m.fillRect(Math.floor(mx),Math.floor(my),Math.max(1,zoom*TILE),Math.max(1,zoom*TILE));
+            // Stone paths
+            if(ch.layers.ground_stone?.data[idx]>=0){
+              color="#8b8b7a"; // stone
+            }
+            // Objects (trees, etc)
+            else if(ch.layers.objects?.data[idx]>=0){
+              color="#5a6b2e"; // darker for objects
+            }
+            // Shadows
+            else if(ch.layers.shadows?.data[idx]>=0){
+              color="#6a7a32"; // mid tone for shadows
+            }
+            
+            const size=Math.ceil(zoom*TILE);
+            m.fillStyle=color;
+            m.fillRect(mx,my,size,size);
           }
         }
       }
