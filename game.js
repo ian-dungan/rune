@@ -47,6 +47,7 @@ export class Game{
       console.log("Loading tilesets.json...");
       this.tilesets=await (await fetch("./assets/world/overworld/tilesets.json")).json();
       console.log("Tilesets config:",Object.keys(this.tilesets.tilesets||{}));
+      console.log("Full tilesets.json:",JSON.stringify(this.tilesets,null,2));
       
       for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
         const path="./"+ts.src;
@@ -132,6 +133,19 @@ export class Game{
     const tsName=layer.tileset;
     const ts=this.tilesets.tilesets[tsName]||this.tilesets.tilesets.grass;
     const img=this.images[tsName]||this.images.grass;
+    
+    if(!this._layerLogged && tsName==='plant'){
+      console.log("Plant layer debug:",{
+        tsName,
+        hasTileset:!!ts,
+        hasImage:!!img,
+        imageSize:img?`${img.width}x${img.height}`:'N/A',
+        cols:ts?.cols,
+        sampleData:layer.data.slice(0,10)
+      });
+      this._layerLogged=true;
+    }
+    
     const cols=ts.cols; const data=layer.data; const z=this.cam.zoom;
     for(let i=0;i<data.length;i++){
       const tid=data[i]; if(tid===-1||tid==null) continue;
@@ -153,6 +167,18 @@ export class Game{
     const img=this.images.player;
     const ts=this.tilesets?.tilesets?.player;
     
+    // DEBUG
+    if(!this._logged){
+      console.log("Player sprite debug:",{
+        hasImage:!!img,
+        imageSize:img?`${img.width}x${img.height}`:'N/A',
+        tileset:ts,
+        cols:ts?.cols,
+        frame:p.frame
+      });
+      this._logged=true;
+    }
+    
     // fallback if assets missing
     if(!img || !ts){
       console.warn("Player sprite missing:",{img:!!img,ts:!!ts});
@@ -173,6 +199,11 @@ export class Game{
 
     const rL=srcRect(lower, cols);
     const rU=srcRect(upper, cols);
+
+    // DEBUG first few frames
+    if(p.frame < 3){
+      console.log(`Frame ${p.frame}:`,{lower,upper,rL,rU,cols});
+    }
 
     // draw sprite (upper then lower for 32x64 total)
     const w=TILE*z, h=TILE*z;
