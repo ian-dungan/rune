@@ -83,7 +83,7 @@ export class Game{
       if(dist<6) this._target=null; else {tx=dx/dist; ty=dy/dist;}
     }
     const mx=ax||tx, my=ay||ty; const len=Math.hypot(mx,my)||1;
-    const sp=210;
+    const sp=120;
     this.player.x += (mx/len)*sp*dt; this.player.y += (my/len)*sp*dt;
     this.cam.x += (this.player.x-this.cam.x)*0.12; this.cam.y += (this.player.y-this.cam.y)*0.12;
     const moving=(Math.abs(mx)+Math.abs(my))>0.01;
