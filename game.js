@@ -1,7 +1,7 @@
 import { clamp, showToast } from "./util.js";
 const TILE=32, CHUNK=32;
 function k(cx,cy){return `${cx},${cy}`;}
-async function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error("img "+src));i.src=src;});}
+async function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>{console.log("✓ Loaded:",src);res(i);};i.onerror=()=>{console.error("✗ Failed:",src);rej(new Error("img "+src));};i.src=src;});}
 function srcRect(idx,cols){return {x:(idx%cols)*TILE,y:Math.floor(idx/cols)*TILE,w:TILE,h:TILE};}
 
 export class Game{
@@ -39,12 +39,27 @@ export class Game{
     return {x:(wx-this.cam.x)*z+cx,y:(wy-this.cam.y)*z+cy};}
 
   async loadStaticWorld(){
-    this.meta=await (await fetch("./assets/world/overworld/meta.json")).json();
-    this.tilesets=await (await fetch("./assets/world/overworld/tilesets.json")).json();
-    for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
-      this.images[name]=await loadImage("./"+ts.src);
+    try{
+      console.log("Loading meta.json...");
+      this.meta=await (await fetch("./assets/world/overworld/meta.json")).json();
+      console.log("Meta loaded:",this.meta);
+      
+      console.log("Loading tilesets.json...");
+      this.tilesets=await (await fetch("./assets/world/overworld/tilesets.json")).json();
+      console.log("Tilesets config:",Object.keys(this.tilesets.tilesets||{}));
+      
+      for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
+        const path="./"+ts.src;
+        console.log(`Loading ${name} from ${path}...`);
+        this.images[name]=await loadImage(path);
+      }
+      
+      console.log("All assets loaded successfully!");
+      showToast("Loaded sprite tiles + static world.");
+    }catch(err){
+      console.error("Failed to load world:",err);
+      showToast("Error loading world assets - check console");
     }
-    showToast("Loaded sprite tiles + static world.");
   }
 
   start(){this._run=true;this._last=performance.now();requestAnimationFrame(t=>this._tick(t));}
@@ -131,19 +146,57 @@ export class Game{
 
   _drawPlayer(){
     const z=this.cam.zoom, p=this.player, c=this.ctx;
-    const frames=(this.tilesets?.palette?.player?.frames||[0]); const fi=frames[p.frame]??frames[0];
-    const ts=this.tilesets.tilesets.player, img=this.images.player, r=srcRect(fi,ts.cols);
     const s=this._w2s(p.x,p.y);
-    c.fillStyle="rgba(0,0,0,0.35)"; c.beginPath(); c.ellipse(s.x,s.y+18*z,10*z,5*z,0,0,Math.PI*2); c.fill();
-    c.// Player sprite (always visible)
-    const dx = s.x-(TILE*z)/2, dy = s.y-(TILE*z);
-    // Fallback marker behind sprite so player is never invisible
-    c.fillStyle="rgba(255,255,255,0.15)"; c.beginPath(); c.arc(s.x,s.y-8*z,9*z,0,Math.PI*2); c.fill();
-    c.strokeStyle="rgba(0,0,0,0.55)"; c.lineWidth=2*z; c.beginPath(); c.arc(s.x,s.y-8*z,9*z,0,Math.PI*2); c.stroke();
-    c.drawImage(img,r.x,r.y,r.w,r.h,dx,dy,TILE*z,TILE*z);
-    c.font=`${Math.floor(12*z)}px system-ui`; c.textAlign="center";
-    c.fillStyle="rgba(0,0,0,0.6)"; c.fillText(p.name,s.x+1,s.y-(TILE*z)-8*z+1);
-    c.fillStyle="#d6b35f"; c.fillText(p.name,s.x,s.y-(TILE*z)-8*z);
+
+    // shadow (always draw)
+    c.fillStyle="rgba(0,0,0,0.35)";
+    c.beginPath(); c.ellipse(s.x,s.y+18*z,10*z,5*z,0,0,Math.PI*2); c.fill();
+
+    const img=this.images.player;
+    const ts=this.tilesets?.tilesets?.player;
+    const frames=this.tilesets?.palette?.player?.frames;
+    
+    // fallback if assets missing
+    if(!img || !ts || !frames || frames.length===0){
+      console.warn("Player sprite not ready:",{img:!!img,ts:!!ts,frames:frames?.length});
+      c.fillStyle="#58b2ff";
+      c.fillRect(s.x-6*z,s.y-18*z,12*z,18*z);
+      // nameplate
+      c.font=`${Math.floor(12*z)}px system-ui`;
+      c.textAlign="center";
+      c.fillStyle="rgba(0,0,0,0.6)";
+      c.fillText(p.name, s.x+1, s.y-20*z+1);
+      c.fillStyle="#d6b35f";
+      c.fillText(p.name, s.x, s.y-20*z);
+      return;
+    }
+
+    const cols=ts.cols||4;
+    const lower = frames[p.frame] ?? frames[0] ?? 0;
+    const upper = lower + cols; // next row down
+
+    const rL=srcRect(lower, cols);
+    const rU=srcRect(upper, cols);
+
+    // draw sprite (upper then lower for 32x64 total)
+    const w=TILE*z, h=TILE*z;
+    c.drawImage(img, rU.x,rU.y,rU.w,rU.h, s.x-w/2, s.y-2*h, w,h);
+    c.drawImage(img, rL.x,rL.y,rL.w,rL.h, s.x-w/2, s.y-h, w,h);
+
+    // subtle outline
+    c.globalAlpha=0.85;
+    c.strokeStyle="rgba(0,0,0,0.45)";
+    c.lineWidth=Math.max(1, Math.floor(1*z));
+    c.strokeRect(s.x-w/2, s.y-2*h, w, 2*h);
+    c.globalAlpha=1;
+
+    // nameplate
+    c.font=`${Math.floor(12*z)}px system-ui`;
+    c.textAlign="center";
+    c.fillStyle="rgba(0,0,0,0.6)";
+    c.fillText(p.name, s.x+1, s.y-2*TILE*z-8*z+1);
+    c.fillStyle="#d6b35f";
+    c.fillText(p.name, s.x, s.y-2*TILE*z-8*z);
   }
 
   _drawMinimap(){
