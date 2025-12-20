@@ -44,15 +44,19 @@ export class Game{
       this.tilesets=await (await fetch("./assets/world/overworld/tilesets.json")).json();
       
       for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
-        if(name==='player') continue; // Skip old player sprite
+        if(name==='player') continue;
         this.images[name]=await loadImage("./"+ts.src);
       }
       
-      // Load new player sprite
+      // Load player sprite
       this.images.player=await loadImage("./player_sprite.png");
       
-      console.log("Assets loaded. Player sprite ready.");
-      showToast("Loaded sprite tiles + static world.");
+      // Initialize region cache
+      this.regions = new Map();
+      this.REGION_SIZE = 10;
+      
+      console.log("Assets loaded. Static world ready (region-based).");
+      showToast("Loaded sprite tiles. Static world ready!");
     }catch(err){
       console.error("Failed to load world:",err);
       showToast("Error loading world assets - check console");
@@ -101,15 +105,45 @@ export class Game{
   async _chunk(cx,cy){
     const kk=k(cx,cy);
     if(this.cache.has(kk)) return this.cache.get(kk);
-    const res=await fetch(`./assets/world/overworld/chunks/c_${cx}_${cy}.json`);
-    if(!res.ok){
-      const fill=new Array(CHUNK*CHUNK).fill(this.meta.defaultFill.tile);
-      const blank={cx,cy,layers:{ground_grass:{tileset:"grass",data:fill},ground_stone:{tileset:"stone",data:new Array(CHUNK*CHUNK).fill(-1)},shadows:{tileset:"shadowPlant",data:new Array(CHUNK*CHUNK).fill(-1)},objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)}}};
-      this.cache.set(kk,blank); return blank;
+    
+    // Determine which region this chunk belongs to
+    const rx = Math.floor(cx / this.REGION_SIZE);
+    const ry = Math.floor(cy / this.REGION_SIZE);
+    const regionKey = `${rx}_${ry}`;
+    
+    // Load region if not cached
+    if(!this.regions.has(regionKey)){
+      try{
+        const res = await fetch(`./assets/world/overworld/regions/region_${regionKey}.json`);
+        if(res.ok){
+          const chunks = await res.json();
+          // Cache all chunks from this region
+          for(const chunk of chunks){
+            this.cache.set(k(chunk.cx, chunk.cy), chunk);
+          }
+          this.regions.set(regionKey, true);
+          console.log(`Loaded region ${regionKey} (${chunks.length} chunks)`);
+        }
+      }catch(err){
+        console.warn(`Region ${regionKey} not found, using fallback`);
+        this.regions.set(regionKey, false);
+      }
     }
-    const ch=await res.json(); this.cache.set(kk,ch);
-    if(this.cache.size>90){const first=this.cache.keys().next().value; this.cache.delete(first);}
-    return ch;
+    
+    // Return chunk if now cached, otherwise fallback
+    if(this.cache.has(kk)) return this.cache.get(kk);
+    
+    // Fallback for missing chunks
+    const fill=new Array(CHUNK*CHUNK).fill(this.meta.defaultFill.tile);
+    return {
+      cx,cy,
+      layers:{
+        ground_grass:{tileset:"grass",data:fill},
+        ground_stone:{tileset:"stone",data:new Array(CHUNK*CHUNK).fill(-1)},
+        shadows:{tileset:"shadowPlant",data:new Array(CHUNK*CHUNK).fill(-1)},
+        objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)}
+      }
+    };
   }
 
   _render(){
@@ -183,8 +217,6 @@ export class Game{
     }
 
     // Sprite sheet layout: 16 cols (96px each) x 4 rows (80px each)
-    // Row: 0=down, 1=left, 2=right, 3=up
-    // Cols: 0-7=idle, 8-15=run
     const SPRITE_W=96, SPRITE_H=80;
     const dirRow={down:0,left:1,right:2,up:3};
     const row=dirRow[p.dir]||0;
@@ -193,25 +225,25 @@ export class Game{
     const sx=col*SPRITE_W;
     const sy=row*SPRITE_H;
     
-    // Scale sprite to world size and position feet on ground
-    const scale=0.5; // Slightly bigger
+    // Scale sprite to world size
+    const scale=0.5;
     const w=SPRITE_W*scale*z;
     const h=SPRITE_H*scale*z;
     
-    // Draw shadow first
+    // Draw shadow at ground level
     c.fillStyle="rgba(0,0,0,0.35)";
-    c.beginPath(); c.ellipse(s.x,s.y+4*z,8*z,4*z,0,0,Math.PI*2); c.fill();
+    c.beginPath(); c.ellipse(s.x,s.y,8*z,4*z,0,0,Math.PI*2); c.fill();
     
-    // Draw sprite with feet at s.y (player position)
-    c.drawImage(img, sx, sy, SPRITE_W, SPRITE_H, s.x-w/2, s.y-h+8*z, w, h);
+    // Draw sprite with BOTTOM at s.y (ground level)
+    c.drawImage(img, sx, sy, SPRITE_W, SPRITE_H, s.x-w/2, s.y-h, w, h);
 
-    // nameplate
+    // nameplate above sprite
     c.font=`${Math.floor(12*z)}px system-ui`;
     c.textAlign="center";
     c.fillStyle="rgba(0,0,0,0.6)";
-    c.fillText(p.name, s.x+1, s.y-h+4*z);
+    c.fillText(p.name, s.x+1, s.y-h-6*z+1);
     c.fillStyle="#d6b35f";
-    c.fillText(p.name, s.x, s.y-h+3*z);
+    c.fillText(p.name, s.x, s.y-h-6*z);
   }
 
   _drawMinimap(){
