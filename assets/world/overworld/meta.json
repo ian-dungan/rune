@@ -1,0 +1,16 @@
+{
+  "tileSize": 32,
+  "chunkSize": 32,
+  "worldChunks": {
+    "w": 5,
+    "h": 5
+  },
+  "originChunk": {
+    "cx": 2,
+    "cy": 2
+  },
+  "defaultFill": {
+    "set": "grass",
+    "tile": 0
+  }
+}
