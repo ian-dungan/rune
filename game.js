@@ -166,23 +166,15 @@ export class Game{
     const tL=Math.floor(left/TILE)-2,tR=Math.floor(right/TILE)+2,tT=Math.floor(top/TILE)-2,tB=Math.floor(bottom/TILE)+2;
     const cL=Math.floor(tL/CHUNK),cR=Math.floor(tR/CHUNK),cT=Math.floor(tT/CHUNK),cB=Math.floor(tB/CHUNK);
     
-    // Draw all chunks (BELOW pass)
+    // Draw all chunks synchronously (already cached)
     for(let cy=cT;cy<=cB;cy++){
       for(let cx=cL;cx<=cR;cx++){
         this._drawChunkSync(cx,cy);
       }
     }
-
-    // Player always renders between below/above passes
-    this._drawPlayer();
-
-    // Draw all chunks (ABOVE pass)
-    for(let cy=cT;cy<=cB;cy++){
-      for(let cx=cL;cx<=cR;cx++){
-        this._drawChunkSyncAbove(cx,cy);
-      }
-    }
-
+    
+    // Now draw player on top
+    this._drawPlayer(); 
     this._drawMinimap();
   }
 
@@ -201,54 +193,16 @@ export class Game{
     if(ch.layers.ground_grass) this._drawLayer(ch.layers.ground_grass,bx,by,false);
     if(ch.layers.ground_stone) this._drawLayer(ch.layers.ground_stone,bx,by,false);
     if(ch.layers.ground) this._drawLayer(ch.layers.ground,bx,by,false);
-
-    // Shadows under everything
+    
+    // Shadows
     this._drawLayer(ch.layers.shadows,bx,by,true);
-
-    // Decorations / low layer
+    
+    // Objects and decorations (order: structures, decorations, trees, objects on top)
+    if(ch.layers.structures) this._drawLayer(ch.layers.structures,bx,by,false);
     if(ch.layers.decorations) this._drawLayer(ch.layers.decorations,bx,by,false);
-
-    // Draw objects/props/trees/structures that are behind the player (by Y)
-    if(ch.layers.trees) this._drawLayerSplit(ch.layers.trees,bx,by,false,"below");
-    if(ch.layers.structures) this._drawLayerSplit(ch.layers.structures,bx,by,false,"below");
-    if(ch.layers.props) this._drawLayerSplit(ch.layers.props,bx,by,false,"below");
-    if(ch.layers.objects) this._drawLayerSplit(ch.layers.objects,bx,by,false,"below");
-
-  _drawChunkSyncAbove(cx,cy)
-    const kk=k(cx,cy);
-    if(!this.cache.has(kk)) return;
-    const ch=this.cache.get(kk);
-    const bx=cx*CHUNK*TILE, by=cy*CHUNK*TILE;
-
-    // Draw things that should cover the player when they are "in front" (by Y)
-    if(ch.layers.trees) this._drawLayerSplit(ch.layers.trees,bx,by,false,"above");
-    if(ch.layers.structures) this._drawLayerSplit(ch.layers.structures,bx,by,false,"above");
-    if(ch.layers.props) this._drawLayerSplit(ch.layers.props,bx,by,false,"above");
-    if(ch.layers.objects) this._drawLayerSplit(ch.layers.objects,bx,by,false,"above");
-  }
-
-  }
-
-  _drawLayerSplit(layer,bx,by,isShadow,mode){
-    // mode: "below" draws tiles whose world-y is <= player.y; "above" draws > player.y
-    if(!layer) return;
-    const splitY=this.player.y;
-    const tsName=layer.tileset;
-    const ts=this.tilesets.tilesets[tsName]||this.tilesets.tilesets.grass;
-    const img=this.images[tsName]||this.images.grass;
-    const cols=ts.cols; const data=layer.data; const z=this.cam.zoom;
-    const anchor = this._layerAnchor(tsName);
-    for(let i=0;i<data.length;i++){
-      const tid=data[i]; if(tid===-1||tid==null) continue;
-      const tx=i%CHUNK, ty=Math.floor(i/CHUNK);
-      const wx=bx+tx*TILE, wy=by+ty*TILE;
-      if(mode==="below" && wy>splitY) continue;
-      if(mode==="above" && wy<=splitY) continue;
-      const s=this._w2s(wx,wy-anchor);
-      const r=srcRect(tid,cols);
-      const dx=isShadow?2*z:0, dy=isShadow?3*z:0;
-      this.ctx.drawImage(img,r.x,r.y,r.w,r.h,s.x+dx,s.y+dy,TILE*z,TILE*z);
-    }
+    if(ch.layers.trees) this._drawLayer(ch.layers.trees,bx,by,false);
+    if(ch.layers.props) this._drawLayer(ch.layers.props,bx,by,false);
+    this._drawLayer(ch.layers.objects,bx,by,false);
   }
 
   _drawLayer(layer,bx,by,isShadow){
