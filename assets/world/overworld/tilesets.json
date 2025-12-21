@@ -1,0 +1,28 @@
+{
+  "tilesets": {
+    "grass": {
+      "src": "assets/tiles/TX Tileset Grass.png",
+      "cols": 8
+    },
+    "stone": {
+      "src": "assets/tiles/TX Tileset Stone Ground.png",
+      "cols": 8
+    },
+    "plant": {
+      "src": "assets/tiles/TX Plant.png",
+      "cols": 16
+    },
+    "shadowPlant": {
+      "src": "assets/tiles/TX Shadow Plant.png",
+      "cols": 16
+    },
+    "wall": {
+      "src": "assets/tiles/TX Tileset Wall.png",
+      "cols": 16
+    },
+    "props": {
+      "src": "assets/tiles/TX Props.png",
+      "cols": 16
+    }
+  }
+}
