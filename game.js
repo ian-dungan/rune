@@ -41,7 +41,7 @@ export class Game{
   async loadStaticWorld(){
     try{
       this.meta=await (await fetch("./assets/world/overworld/meta.json")).json();
-      this.tilesets=await (await fetch("./assets/world/overworld/tilesets.json")).json();
+      this.tilesets=await (await fetch("./tilesets.json")).json();
       
       for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
         if(name==='player') continue;
