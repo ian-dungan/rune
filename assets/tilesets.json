@@ -110,7 +110,7 @@
     },
     "baseChip": {
       "src": "assets/tiles/[Base]BaseChip_pipo.png",
-      "cols": 32
+      "cols": 8
     },
     "lightShadow": {
       "src": "assets/tiles/LightShadow_pipo.png",
