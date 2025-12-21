@@ -40,7 +40,7 @@ export class Game{
 
   async loadStaticWorld(){
     try{
-      this.meta=await (await fetch("./assets/world/overworld/meta.json")).json();
+      this.meta=await (await fetch("./meta.json").catch(()=>fetch("./assets/world/overworld/meta.json"))).json();
       this.tilesets=await (await fetch("./tilesets.json")).json();
       
       for(const [name,ts] of Object.entries(this.tilesets.tilesets)){
@@ -113,33 +113,48 @@ export class Game{
     
     // Load region if not cached
     if(!this.regions.has(regionKey)){
-      let loaded = false;
-      // 1) Try static JSON from repo (hand-authored / baked)
       try{
         const res = await fetch(`./assets/world/overworld/regions/region_${regionKey}.json`);
         if(res.ok){
           const chunks = await res.json();
+          // Cache all chunks from this region
           for(const chunk of chunks){
             this.cache.set(k(chunk.cx, chunk.cy), chunk);
           }
           this.regions.set(regionKey, true);
-          loaded = true;
           console.log(`Loaded region ${regionKey} (${chunks.length} chunks)`);
+        } else {
+          console.warn(`Region ${regionKey} not found (${res.status})`);
+          this.regions.set(regionKey, false);
         }
-      }catch(e){
-        // ignore and fall through to generator
-      }
-      // 2) Deterministic generator fallback (fixed-seed procedural => same world every time)
-      if(!loaded){
-        const chunks = WorldGen.generateRegion(rx, ry, this.tilesets, this.meta || {});
-        for(const chunk of chunks){
-          this.cache.set(k(chunk.cx, chunk.cy), chunk);
-        }
-        this.regions.set(regionKey, true);
-        loaded = true;
-        console.log(`Generated region ${regionKey} (${chunks.length} chunks)`);
+      }catch(err){
+        console.error(`Error loading region ${regionKey}:`, err);
+        this.regions.set(regionKey, false);
       }
     }
+    
+    // Return chunk if now cached
+    if(this.cache.has(kk)) return this.cache.get(kk);
+    
+    // Fallback: create grass chunk
+    console.warn(`Using fallback for chunk (${cx},${cy})`);
+    const grassTiles = [];
+    for(let i=0; i<CHUNK*CHUNK; i++) grassTiles.push(Math.floor(Math.random()*8));
+    
+    return {
+      cx,cy,
+      layers:{
+        ground_grass:{tileset:"grass1",data:grassTiles},
+        ground_water:{tileset:"water1",data:new Array(CHUNK*CHUNK).fill(-1)},
+        ground_dirt:{tileset:"dirt1",data:new Array(CHUNK*CHUNK).fill(-1)},
+        shadows:{tileset:"shadowPlant",data:new Array(CHUNK*CHUNK).fill(-1)},
+        objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)},
+        decorations:{tileset:"flowers",data:new Array(CHUNK*CHUNK).fill(-1)},
+        structures:{tileset:"wall",data:new Array(CHUNK*CHUNK).fill(-1)},
+        trees:{tileset:"lpcTreetop",data:new Array(CHUNK*CHUNK).fill(-1)}
+      }
+    };
+  }
 
   _render(){
     const c=this.ctx; c.imageSmoothingEnabled=false;
