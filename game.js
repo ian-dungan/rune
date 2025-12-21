@@ -214,7 +214,7 @@ export class Game{
     if(ch.layers.props) this._drawLayerSplit(ch.layers.props,bx,by,false,"below");
     if(ch.layers.objects) this._drawLayerSplit(ch.layers.objects,bx,by,false,"below");
 
-  _drawChunkSyncAbove(cx,cy){
+  _drawChunkSyncAbove(cx,cy)
     const kk=k(cx,cy);
     if(!this.cache.has(kk)) return;
     const ch=this.cache.get(kk);
