@@ -2,6 +2,9 @@
 const SUPABASE_URL = "https://depvgmvmqapfxjwkkhas.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlcHZnbXZtcWFwZnhqd2traGFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NzkzNzgsImV4cCI6MjA4MDU1NTM3OH0.WLkWVbp86aVDnrWRMb-y4gHmEOs9sRpTwvT8hTmqHC0";
 
+// Default world to join / post chat in. Override by setting `window.RUNE_WORLD_SLUG = 'lobby'` (or another slug) before loading.
+const WORLD_SLUG = (globalThis.RUNE_WORLD_SLUG || 'lobby');
+
 let supabase = null;
 let _statusCb = null;
 
