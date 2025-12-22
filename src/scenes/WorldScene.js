@@ -4,8 +4,13 @@ import Player from '../player/Player.js';
 
 export default class WorldScene extends Phaser.Scene {
   constructor() { super('WorldScene'); }
+
   async create() {
-    const user = (await supabase.auth.getUser()).data.user;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      this.scene.start('LoginScene');
+      return;
+    }
     const world_id = 'demo-world';
     this.world_id = world_id;
     this.playerState = await getOrCreatePlayerState(user.id, world_id);
@@ -17,6 +22,7 @@ export default class WorldScene extends Phaser.Scene {
     this.cameras.main.setZoom(3.5);
     subscribeToPlayerStates(world_id, payload => {});
   }
+
   update() {
     if(this.player) this.player.update();
   }
