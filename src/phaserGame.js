@@ -176,15 +176,10 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       }
 
       // Props: spawn as sprites so depth works
-      // (For now we also stamp a tile on props layer so minimap/picking can be added later.)
       const propGroup = this.add.group();
       for(const p of world.props){
-        // If generator gives named kinds, map them to tile frames.
-        // Using props tileset indices (1-based). If unknown, skip.
-        const frame = p.frame ?? p.tile ?? null;
-        // Keep tile stamp disabled visually (layer is alpha 0). Still useful later for picking.
-        if(frame) layerProps.putTileAt(frame, p.x, p.y);
-        const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', (frame ? frame-1 : 0));
+        // Always use frame 0 (first tile in props sheet)
+        const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', 0);
         spr.setOrigin(0.5, 0.75);
         spr.setDepth(10000 + spr.y);
         propGroup.add(spr);
