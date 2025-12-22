@@ -1,13 +1,17 @@
+// Supabase client + helpers for Rune (username auth + profiles + chat)
+// Uses Supabase Auth (email/password) under the hood by mapping username -> deterministic synthetic email.
 
 const SUPABASE_URL = "https://depvgmvmqapfxjwkkhas.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlcHZnbXZtcWFwZnhqd2traGFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NzkzNzgsImV4cCI6MjA4MDU1NTM3OH0.WLkWVbp86aVDnrWRMb-y4gHmEOs9sRpTwvT8hTmqHC0";
+
+// Default world slug; can be overridden by setting window.RUNE_WORLD_SLUG before modules load.
+const WORLD_SLUG = (typeof window !== 'undefined' && window.RUNE_WORLD_SLUG) ? String(window.RUNE_WORLD_SLUG) : 'lobby';
 
 let supabase = null;
 let _statusCb = null;
 
 export async function initSupabase(statusCb){
   _statusCb = statusCb;
-  // Supabase JS (CDN ESM)
   const mod = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
   supabase = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -15,19 +19,37 @@ export async function initSupabase(statusCb){
   statusCb?.(true);
 }
 
-function normalizeUsername(raw){
-  return String(raw || '').trim();
+/** Normalize username for storage / uniqueness checks */
+function normalizeUsername(username){
+  return String(username || '').trim();
 }
 
+/**
+ * Map username -> valid synthetic email local-part.
+ * Must stay stable forever or older accounts won't be able to log in.
+ */
 function usernameToEmail(username){
-  // Supabase Auth requires email; we synthesize one deterministically from a sanitized username.
   const u = normalizeUsername(username).toLowerCase();
-  // allow letters/numbers plus . _ -
-  const local = u.replace(/\s+/g,'.').replace(/[^a-z0-9._-]/g,'').replace(/^\.+/,'').replace(/\.+$/,'');
-  if(!local) throw new Error('Invalid username.');
-  return `${local}@rune.local`;
+  // allow letters, numbers, underscore in UI; but sanitize further for email
+  // replace spaces with '.', drop other chars, collapse dots.
+  const local = u
+    .replace(/\s+/g, '.')
+    .replace(/[^a-z0-9._-]/g, '')
+    .replace(/\.+/g, '.')
+    .replace(/^\.|\.$/g, '');
+  // Ensure non-empty and not too long for email local part (64 max)
+  const safe = (local || 'user').slice(0, 48);
+  return `${safe}@rune.local`;
 }
 
+/** Extract character fields from settings jsonb */
+function unpackSettings(settings){
+  const s = settings && typeof settings === 'object' ? settings : {};
+  return {
+    display_name: s.display_name || '',
+    outfit: s.outfit || 'green',
+  };
+}
 
 export const auth = {
   async getUser(){
@@ -35,64 +57,75 @@ export const auth = {
     const { data } = await supabase.auth.getUser();
     return data?.user || null;
   },
-  
-async signUpUsername(username, password){
-  if(!supabase) return {ok:false, error:'supabase not ready'};
-  const usernameClean = normalizeUsername(username);
-  if(usernameClean.length < 3) return {ok:false, error:'Username must be at least 3 characters.'};
-  if(usernameClean.length > 20) return {ok:false, error:'Username must be 20 characters or less.'};
 
-  let email;
-  try{
-    email = usernameToEmail(usernameClean);
-  }catch(e){
-    return {ok:false, error:'Username contains invalid characters.'};
-  }
+  async signUpUsername(username, password){
+    if(!supabase) return { ok:false, error:'supabase not ready' };
 
-  // Ensure unique username in rune.player_profiles
-  const exists = await supabase
-    .schema('rune')
-    .from('player_profiles')
-    .select('id')
-    .eq('username_norm', usernameClean.toLowerCase())
-    .limit(1)
-    .maybeSingle();
+    const uname = normalizeUsername(username);
+    // Your UI already enforces this, but keep server-side safety too.
+    if(!/^[a-zA-Z0-9_]{3,16}$/.test(uname)) {
+      return { ok:false, error:'Username must be 3–16 chars (letters/numbers/underscore).' };
+    }
+    if((password||'').length < 6) return { ok:false, error:'Password must be at least 6 characters.' };
 
-  if(exists.data) return {ok:false, error:'That username is taken.'};
+    // Check username uniqueness via username_norm (lowercase)
+    const unameNorm = uname.toLowerCase();
+    const { data: exists, error: e1 } = await supabase
+      .schema('rune')
+      .from('player_profiles')
+      .select('id')
+      .eq('username_norm', unameNorm)
+      .limit(1)
+      .maybeSingle();
 
-  const { error } = await supabase.auth.signUp({ email, password });
-  if(error) return {ok:false, error:error.message};
+    if(e1 && !String(e1.message||'').includes('permission')) {
+      // If RLS blocks this select, you'll see it here; surface message.
+      // (But ideally you allow public select of username_norm only.)
+      return { ok:false, error: e1.message };
+    }
+    if(exists) return { ok:false, error:'That username is taken.' };
 
-  // Create profile row immediately (best-effort).
-  const me = await auth.getUser();
-  if(me){
+    const email = usernameToEmail(uname);
+    const { error } = await supabase.auth.signUp({ email, password });
+    if(error) return { ok:false, error: error.message };
+
+    // Create bare profile row for this user (RLS should allow insert for self)
+    const me = await this.getUser();
+    if(!me) return { ok:false, error:'No session after sign up.' };
+
     const { error: perr } = await supabase
       .schema('rune')
       .from('player_profiles')
-      .insert({ user_id: me.id, username: usernameClean })
+      .insert({ user_id: me.id, username: uname })
       .select('id')
       .maybeSingle();
 
+    // Duplicate errors are OK (race condition)
     if(perr && !String(perr.message||'').toLowerCase().includes('duplicate')) {
-      return {ok:false, error: perr.message};
+      return { ok:false, error: perr.message };
     }
-  }
 
-  return {ok:true};
-},
+    return { ok:true };
   },
-  
-async signInUsername(username, password){
-  if(!supabase) return {ok:false, error:'supabase not ready'};
-  try{
-    const email = usernameToEmail(username);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if(error) return {ok:false, error:error.message};
-    return {ok:true};
-  }catch(e){
-    return {ok:false, error: String(e?.message || e)};
-  }
-},
+
+  async signInUsername(username, password){
+    if(!supabase) return { ok:false, error:'supabase not ready' };
+
+    const uname = normalizeUsername(username);
+    if(!/^[a-zA-Z0-9_]{3,16}$/.test(uname)) {
+      return { ok:false, error:'Username must be 3–16 chars (letters/numbers/underscore).' };
+    }
+    const email = usernameToEmail(uname);
+
+    try{
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if(error) return { ok:false, error: error.message };
+      return { ok:true };
+    }catch(e){
+      return { ok:false, error: String(e?.message || e) };
+    }
+  },
+
   async signOut(){
     if(!supabase) return;
     await supabase.auth.signOut();
@@ -103,88 +136,156 @@ export const profiles = {
   async getMyProfile(){
     const me = await auth.getUser();
     if(!me) return null;
+
     const { data, error } = await supabase
       .schema('rune')
       .from('player_profiles')
-      .select('id,user_id,username,display_name,outfit,settings')
+      .select('id,user_id,username,settings,role,active_world_id,muted_until,mute_reason,created_at')
       .eq('user_id', me.id)
       .maybeSingle();
-    if(error) return null;
-    return data || null;
+
+    if(error) {
+      console.warn('[profiles] getMyProfile error', error);
+      return null;
+    }
+    if(!data) return null;
+
+    const extra = unpackSettings(data.settings);
+    return { ...data, ...extra };
   },
-  async createOrUpdateMyProfile(payload){
+
+  async createOrUpdateMyProfile({ display_name, outfit }){
     const me = await auth.getUser();
-    if(!me) return {ok:false, error:'not logged in'};
+    if(!me) return { ok:false, error:'Not logged in' };
+
+    // Load existing settings so we merge rather than overwrite.
+    const current = await this.getMyProfile();
+    const mergedSettings = {
+      ...(current?.settings && typeof current.settings === 'object' ? current.settings : {}),
+      display_name: String(display_name || '').trim(),
+      outfit: String(outfit || 'green'),
+    };
+
     const { error } = await supabase
       .schema('rune')
       .from('player_profiles')
-      .upsert({
-        user_id: me.id,
-        display_name: payload.display_name,
-        outfit: payload.outfit
-      }, { onConflict: 'user_id' });
-    if(error) return {ok:false, error:error.message};
-    return {ok:true};
+      .upsert(
+        { user_id: me.id, settings: mergedSettings },
+        { onConflict: 'user_id' }
+      );
+
+    if(error) return { ok:false, error: error.message };
+    return { ok:true };
   }
 };
 
 export const chat = (() => {
-  const callbacks = new Set();
-  let channel = null;
+  let _onMessage = null;
+  let _sub = null;
+  let _worldId = null;
 
-  function emit(m){ callbacks.forEach(cb=>cb(m)); }
+  async function getWorldId(){
+    if(_worldId) return _worldId;
+    const { data, error } = await supabase
+      .schema('rune')
+      .from('worlds')
+      .select('id,slug,name')
+      .eq('slug', WORLD_SLUG)
+      .limit(1)
+      .maybeSingle();
+
+    if(error) {
+      console.warn('[chat] could not load world', error);
+      return null;
+    }
+    _worldId = data?.id || null;
+    if(!_worldId) console.warn(`[chat] No world configured. Create rune.worlds row with slug '${WORLD_SLUG}'.`);
+    return _worldId;
+  }
 
   return {
-    onMessage(cb){ callbacks.add(cb); return ()=>callbacks.delete(cb); },
+    onMessage(fn){ _onMessage = fn; },
 
     async bootstrap(){
-      if(!supabase) return;
-      const me = await auth.getUser();
-      if(!me) return;
+      if(!supabase) return { ok:false, error:'supabase not ready' };
 
-      // Load last 50
-      const prof = await profiles.getMyProfile();
-      const { data } = await supabase
+      const wid = await getWorldId();
+      if(!wid) return { ok:false, error:`No world '${WORLD_SLUG}'` };
+
+      // Load recent messages
+      const { data, error } = await supabase
         .schema('rune')
         .from('chat_messages')
-        .select('id,message,created_at,user_id')
+        .select('id,message,created_at,user_id,world_id')
+        .eq('world_id', wid)
         .order('created_at', { ascending: true })
         .limit(50);
 
-      (data||[]).forEach(row=>{
-        emit({ username: prof?.username || 'player', message: row.message, created_at: row.created_at });
+      if(error) return { ok:false, error: error.message };
+
+      // Hydrate usernames (simple)
+      const userIds = Array.from(new Set((data||[]).map(m=>m.user_id).filter(Boolean)));
+      let nameById = {};
+      if(userIds.length){
+        const { data: profs } = await supabase
+          .schema('rune')
+          .from('player_profiles')
+          .select('user_id,username,settings')
+          .in('user_id', userIds);
+        (profs||[]).forEach(p=>{
+          const extra = unpackSettings(p.settings);
+          nameById[p.user_id] = extra.display_name || p.username || 'player';
+        });
+      }
+
+      (data||[]).forEach(m=>{
+        _onMessage?.({ ...m, username: nameById[m.user_id] || 'player' });
       });
 
       // Realtime
-      if(channel) supabase.removeChannel(channel);
-      channel = supabase.channel('rune-chat')
-        .on('postgres_changes', { event: 'INSERT', schema: 'rune', table: 'chat_messages' }, async (payload) => {
-          const row = payload.new;
-          // Try to resolve username (fast path: if it's us)
+      try{ _sub?.unsubscribe?.(); } catch {}
+      _sub = supabase
+        .channel('rune_chat')
+        .on('postgres_changes', { event: 'INSERT', schema: 'rune', table: 'chat_messages', filter: `world_id=eq.${wid}` }, async (payload) => {
+          const m = payload.new;
+          // get sender name
           let username = 'player';
-          if(row.user_id === me.id){
-            username = (await profiles.getMyProfile())?.username || 'you';
-          } else {
-            // lightweight lookup
-            const { data: p } = await supabase.schema('rune').from('player_profiles')
-              .select('username').eq('user_id', row.user_id).maybeSingle();
-            username = p?.username || 'player';
+          const { data: p } = await supabase
+            .schema('rune')
+            .from('player_profiles')
+            .select('username,settings')
+            .eq('user_id', m.user_id)
+            .maybeSingle();
+          if(p){
+            const extra = unpackSettings(p.settings);
+            username = extra.display_name || p.username || username;
           }
-          emit({ username, message: row.message, created_at: row.created_at });
+          _onMessage?.({ ...m, username });
         })
         .subscribe();
+
+      return { ok:true };
     },
 
     async send(message){
-      if(!supabase) return {ok:false, error:'supabase not ready'};
+      if(!supabase) return { ok:false, error:'supabase not ready' };
       const me = await auth.getUser();
-      if(!me) return {ok:false, error:'not logged in'};
+      if(!me) return { ok:false, error:'Not logged in' };
+
+      const wid = await getWorldId();
+      if(!wid) return { ok:false, error:`No world '${WORLD_SLUG}'` };
+
+      const msg = String(message||'').trim();
+      if(!msg) return { ok:false, error:'Empty message' };
+      if(msg.length > 200) return { ok:false, error:'Too long (200 max)' };
+
       const { error } = await supabase
         .schema('rune')
         .from('chat_messages')
-        .insert({ user_id: me.id, message });
-      if(error) return {ok:false, error:error.message};
-      return {ok:true};
+        .insert({ world_id: wid, user_id: me.id, message: msg });
+
+      if(error) return { ok:false, error: error.message };
+      return { ok:true };
     }
   };
 })();
