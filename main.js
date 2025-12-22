@@ -7,6 +7,7 @@ const config = {
   height: 720,
   pixelArt: true,
   backgroundColor: '#1e1e1e',
+  dom: { createContainer: true },
   physics: {
     default: 'arcade',
     arcade: { gravity: { y: 0 }, debug: false }
