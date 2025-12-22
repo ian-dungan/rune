@@ -1,209 +1,257 @@
-
 import { generateWorld, AUTOTILE_4BIT } from './worldgen.js';
 
 export function bootGame({ mountId, onCoords, getPlayerProfile }){
   const mount = document.getElementById(mountId);
   mount.innerHTML = '';
-  let api = {};
 
-  async function loadJson(url){
-    const r = await fetch(url);
-    if(!r.ok) throw new Error(`Failed ${url}: ${r.status}`);
-    return await r.json();
-  }
+  const WORLD_SLUG = (window.RUNE_WORLD_SLUG || 'lobby');
 
-  function tileAt(layer, w, x, y){
-    if(x<0||y<0||x>=w||y>=worldH) return 0;
-    return layer[y*w + x];
-  }
-
-  let worldW=0, worldH=0;
-
-  function makeAutotileLayer(scene, map, name, tileset, srcLayer, placeholderTile){
-    const layer = map.createBlankLayer(name, tileset, 0, 0, worldW, worldH, 32, 32);
-    layer.skipCull = true;
-    for(let y=0;y<worldH;y++){
-      for(let x=0;x<worldW;x++){
-        const v = srcLayer[y*worldW+x];
-        if(!v) continue;
-        // 4bit mask based on same placeholder (value nonzero)
-        let mask = 0;
-        if(tileAt(srcLayer, worldW, x, y-1)) mask |= 1;
-        if(tileAt(srcLayer, worldW, x+1, y)) mask |= 2;
-        if(tileAt(srcLayer, worldW, x, y+1)) mask |= 4;
-        if(tileAt(srcLayer, worldW, x-1, y)) mask |= 8;
-        const id = AUTOTILE_4BIT[mask] || placeholderTile;
-        layer.putTileAt(id, x, y);
-      }
+  class MainScene extends Phaser.Scene {
+    constructor(){
+      super('MainScene');
+      this.player = null;
+      this.cursors = null;
+      this.wKey = this.aKey = this.sKey = this.dKey = null;
+      this.speed = 160;
+      this.worldW = 0;
+      this.worldH = 0;
+      this.meta = null;
+      this.tiles = null;
+      this.profile = null;
     }
-    return layer;
-  }
 
-  class MainScene extends Phaser.Scene{
-    constructor(){ super('Main'); }
-    async preload(){
-      const tiles = await loadJson('./tilesets.json');
-      this.tiles = tiles;
+    preload(){
+      // Load config via Phaser loader (no async fetch in preload)
+      this.load.json('meta', './meta.json');
+      this.load.json('tilesets', './tilesets.json');
 
-      this.load.spritesheet('player', tiles.tilesets.player.image, {
-        frameWidth: tiles.tilesets.player.frameWidth,
-        frameHeight: tiles.tilesets.player.frameHeight
-      });
-
-      // Tilesets
-      this.load.image('grass', tiles.tilesets.grass.image);
-      this.load.image('road', tiles.tilesets.road.image);
-      this.load.image('water', tiles.tilesets.water.image);
-      this.load.image('plant', tiles.tilesets.plant.image);
-      this.load.image('props', tiles.tilesets.props.image);
-
-      // meta
-      this.meta = await loadJson('./meta.json');
+      // We don't yet know image paths until tilesets.json loads, so we load them in create()
+      // but we CAN still preload player sprite with a known path (fallback).
+      this.load.spritesheet('player', 'assets/sprites/player.png', { frameWidth: 32, frameHeight: 32 });
     }
 
     async create(){
-      const profile = await getPlayerProfile?.() || {};
-      const outfit = profile?.outfit || 'green';
+      this.meta = this.cache.json.get('meta') || { seed:'alttp-continent-001', world:{width:256,height:256} };
+      this.tiles = this.cache.json.get('tilesets') || null;
 
-      // Generate world (deterministic)
+      if(!this.tiles?.tilesets){
+        this.add.text(16, 16, 'Missing tilesets.json in repo root', { fontFamily:'monospace', fontSize:'16px', color:'#ff6b6b' })
+          .setScrollFactor(0);
+        return;
+      }
+
+      // Enqueue tileset images now that we know their paths.
+      // Note: Loader can be used inside create; we wait for completion.
+      const ts = this.tiles.tilesets;
+
+      // Set base path relative to page root so GitHub Pages subpaths work.
+      // (Do NOT use module-relative paths here.)
+      this.load.setBaseURL('');
+      this.load.image('grass', ts.grass.image);
+      this.load.image('road',  ts.road.image);
+      this.load.image('water', ts.water.image);
+      this.load.image('plant', ts.plant.image);
+      this.load.image('props', ts.props.image);
+
+      // Optional extras if present in tilesets.json
+      if(ts.struct?.image) this.load.image('struct', ts.struct.image);
+      if(ts.walls?.image)  this.load.image('walls',  ts.walls.image);
+
+      await new Promise((resolve) => {
+        this.load.once(Phaser.Loader.Events.COMPLETE, resolve);
+        this.load.start();
+      });
+
+      // If any textures still missing, show a clear message.
+      const needed = ['grass','road','water','plant','props','player'];
+      const missing = needed.filter(k => !this.textures.exists(k));
+      if(missing.length){
+        this.add.text(16, 16, 'Missing textures: ' + missing.join(', '), { fontFamily:'monospace', fontSize:'16px', color:'#ff6b6b' })
+          .setScrollFactor(0);
+        return;
+      }
+
+      // Fetch player profile (async) but don't block map creation forever.
+      try{
+        this.profile = await (getPlayerProfile?.() ?? null);
+      }catch(e){
+        console.warn('[Profile] getPlayerProfile failed:', e);
+        this.profile = null;
+      }
+
       const world = generateWorld(this.meta);
-      worldW = world.width; worldH = world.height;
+      this.worldW = world.width;
+      this.worldH = world.height;
 
-      // Tilemap (multiple layers)
-      const map = this.make.tilemap({ tileWidth:32, tileHeight:32, width:worldW, height:worldH });
+      // Tilemap setup
+      const map = this.make.tilemap({
+        tileWidth: 32,
+        tileHeight: 32,
+        width: this.worldW,
+        height: this.worldH
+      });
 
       const tsGrass = map.addTilesetImage('grass', 'grass', 32, 32, 0, 0, 1);
-      const tsRoad  = map.addTilesetImage('road', 'road', 32, 32, 0, 0, 1);
+      const tsRoad  = map.addTilesetImage('road',  'road',  32, 32, 0, 0, 1);
       const tsWater = map.addTilesetImage('water', 'water', 32, 32, 0, 0, 1);
       const tsPlant = map.addTilesetImage('plant', 'plant', 32, 32, 0, 0, 1);
       const tsProps = map.addTilesetImage('props', 'props', 32, 32, 0, 0, 1);
 
-      // Grass layer (direct tile ids)
-      const grassLayer = map.createBlankLayer('ground_grass', tsGrass, 0, 0, worldW, worldH, 32, 32);
-      grassLayer.skipCull = true;
-      for(let y=0;y<worldH;y++){
-        for(let x=0;x<worldW;x++){
-          const id = world.layers.grass[y*worldW+x];
-          grassLayer.putTileAt(id || 1, x, y);
+      // Layers: base -> overlays
+      const layerGrass = map.createBlankLayer('ground_grass', tsGrass, 0, 0, this.worldW, this.worldH, 32, 32);
+      const layerRoad  = map.createBlankLayer('ground_road',  tsRoad,  0, 0, this.worldW, this.worldH, 32, 32);
+      const layerWater = map.createBlankLayer('ground_water', tsWater, 0, 0, this.worldW, this.worldH, 32, 32);
+      const layerDeco  = map.createBlankLayer('decorations',  tsPlant, 0, 0, this.worldW, this.worldH, 32, 32);
+      const layerProps = map.createBlankLayer('props',        tsProps, 0, 0, this.worldW, this.worldH, 32, 32);
+
+      layerGrass.skipCull = true;
+      layerRoad.skipCull  = true;
+      layerWater.skipCull = true;
+      layerDeco.skipCull  = true;
+      layerProps.skipCull = true;
+
+      const W = this.worldW;
+      const H = this.worldH;
+
+      const tileAt = (arr, x, y) => {
+        if(x<0 || y<0 || x>=W || y>=H) return 0;
+        return arr[y*W + x];
+      };
+
+      // Autotile 4-neighborhood helper
+      const autoIndex = (arr, x, y) => {
+        const center = tileAt(arr, x, y);
+        if(!center) return 0;
+        let mask = 0;
+        if(tileAt(arr, x, y-1)) mask |= 1;
+        if(tileAt(arr, x+1, y)) mask |= 2;
+        if(tileAt(arr, x, y+1)) mask |= 4;
+        if(tileAt(arr, x-1, y)) mask |= 8;
+        return AUTOTILE_4BIT[mask] || center;
+      };
+
+      // Paint layers
+      for(let y=0;y<H;y++){
+        for(let x=0;x<W;x++){
+          const i = y*W+x;
+
+          // grass always
+          const g = world.layers.grass[i] || 1;
+          layerGrass.putTileAt(g, x, y);
+
+          // water autotile
+          if(world.layers.water[i]){
+            const w = autoIndex(world.layers.water, x, y);
+            layerWater.putTileAt(w, x, y);
+          }
+
+          // road autotile
+          if(world.layers.road[i]){
+            const r = autoIndex(world.layers.road, x, y);
+            layerRoad.putTileAt(r, x, y);
+          }
+
+          // deco optional
+          if(world.layers.deco[i]){
+            layerDeco.putTileAt(world.layers.deco[i], x, y);
+          }
         }
       }
 
-      // Autotiled water/road
-      const waterLayer = makeAutotileLayer(this, map, 'ground_water', tsWater, world.layers.water, 1);
-      const roadLayer  = makeAutotileLayer(this, map, 'ground_road', tsRoad,  world.layers.road, 1);
-
-      // Deco layer
-      const decoLayer = map.createBlankLayer('decorations', tsPlant, 0, 0, worldW, worldH, 32, 32);
-      decoLayer.skipCull = true;
-      for(let y=0;y<worldH;y++){
-        for(let x=0;x<worldW;x++){
-          const id = world.layers.deco[y*worldW+x];
-          if(id) decoLayer.putTileAt(id, x, y);
-        }
-      }
-
-      // Props as sprites with depth sorting + collisions
-      this.physics.world.setBounds(0,0, worldW*32, worldH*32);
-
-      const colliders = this.physics.add.staticGroup();
-      const propSprites = [];
+      // Props: spawn as sprites so depth works
+      // (For now we also stamp a tile on props layer so minimap/picking can be added later.)
+      const propGroup = this.add.group();
       for(const p of world.props){
-        const px = p.x*32 + 16;
-        const py = p.y*32 + 16;
-        let frame = 1;
-        if(p.kind==='tree') frame = 1;
-        if(p.kind==='rock') frame = 33;
-        const s = this.add.sprite(px, py, 'props', frame);
-        s.setOrigin(0.5, 0.65);
-        s.depth = py;
-        propSprites.push(s);
-
-        // simple blocker
-        const b = this.add.rectangle(px, py+6, 20, 18, 0x000000, 0);
-        this.physics.add.existing(b, true);
-        colliders.add(b);
+        // If generator gives named kinds, map them to tile frames.
+        // Using props tileset indices (1-based). If unknown, skip.
+        const frame = p.frame ?? p.tile ?? null;
+        if(frame){
+          layerProps.putTileAt(frame, p.x, p.y);
+        }
+        const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', (frame ? frame-1 : 0));
+        spr.setOrigin(0.5, 0.75);
+        spr.setDepth(spr.y);
+        propGroup.add(spr);
       }
 
       // Player
-      const spawn = world.spawn || {x: 40, y: 40};
-      this.player = this.physics.add.sprite(spawn.x*32 + 16, spawn.y*32 + 16, 'player', 0);
-      this.player.setSize(16, 18).setOffset(8, 12);
+      const spawnX = world.spawn?.x ?? Math.floor(W/2);
+      const spawnY = world.spawn?.y ?? Math.floor(H/2);
+
+      this.player = this.physics.add.sprite(spawnX*32+16, spawnY*32+16, 'player', 0);
+      this.player.setOrigin(0.5, 0.75);
+      this.player.setDepth(this.player.y);
       this.player.setCollideWorldBounds(true);
-      this.player.depth = this.player.y;
 
-      // Outfit tint (simple but effective)
-      const tints = { green:0x7dffb1, blue:0x86c7ff, red:0xff8492, tan:0xe9d7a3 };
-      this.player.setTint(tints[outfit] || 0xffffff);
-
-      // Animations
-      this.anims.create({ key:'walkDown', frames:this.anims.generateFrameNumbers('player',{ start:0, end:3 }), frameRate:10, repeat:-1 });
-      this.anims.create({ key:'walkLeft', frames:this.anims.generateFrameNumbers('player',{ start:4, end:7 }), frameRate:10, repeat:-1 });
-      this.anims.create({ key:'walkRight',frames:this.anims.generateFrameNumbers('player',{ start:8, end:11}), frameRate:10, repeat:-1 });
-      this.anims.create({ key:'walkUp',   frames:this.anims.generateFrameNumbers('player',{ start:12,end:15}), frameRate:10, repeat:-1 });
-
-      this.cursors = this.input.keyboard.addKeys({ up:'W', left:'A', down:'S', right:'D', up2:'UP', left2:'LEFT', down2:'DOWN', right2:'RIGHT' });
-
-      this.physics.add.collider(this.player, colliders);
+      // Input
+      this.cursors = this.input.keyboard.createCursorKeys();
+      this.wKey = this.input.keyboard.addKey('W');
+      this.aKey = this.input.keyboard.addKey('A');
+      this.sKey = this.input.keyboard.addKey('S');
+      this.dKey = this.input.keyboard.addKey('D');
 
       // Camera
-      const cam = this.cameras.main;
-      cam.setBounds(0,0, worldW*32, worldH*32);
-      cam.startFollow(this.player, true, this.meta.camera?.lerp ?? 0.12, this.meta.camera?.lerp ?? 0.12);
-      cam.setZoom(this.meta.camera?.zoom ?? 2.5);
+      this.cameras.main.setBounds(0,0,W*32,H*32);
+      this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+      this.cameras.main.setZoom(this.meta.camera?.zoom ?? 2);
 
-      // Subtle color grade overlay for “ALTTP vibe”
-      const vignette = this.add.rectangle(0,0, 10, 10, 0x0b0f14, 0.10).setOrigin(0).setScrollFactor(0);
-      vignette.setDisplaySize(this.scale.width, this.scale.height);
-      this.scale.on('resize', (s)=> vignette.setDisplaySize(s.width, s.height));
-
-      // Loop: update HUD coords
-      this.events.on('postupdate', ()=>{
-        onCoords?.(Math.floor(this.player.x/32), Math.floor(this.player.y/32));
+      // UI callbacks
+      this.events.on('postupdate', () => {
+        if(!this.player) return;
+        const tx = Math.floor(this.player.x/32);
+        const ty = Math.floor(this.player.y/32);
+        onCoords?.(tx, ty);
       });
+
+      console.log(`[World] Mode: generated • seed: ${this.meta.seed || 'alttp'} • size: ${W}x${H} • world: ${WORLD_SLUG}`);
     }
 
     update(){
-      const speed = this.meta.player?.speed ?? 140;
-      const k = this.cursors;
-      const vx = (k.left.isDown||k.left2.isDown ? -1:0) + (k.right.isDown||k.right2.isDown ? 1:0);
-      const vy = (k.up.isDown||k.up2.isDown ? -1:0) + (k.down.isDown||k.down2.isDown ? 1:0);
+      if(!this.player) return;
 
-      const v = new Phaser.Math.Vector2(vx, vy).normalize().scale(speed);
-      this.player.setVelocity(v.x, v.y);
+      const up    = this.cursors.up.isDown || this.wKey.isDown;
+      const down  = this.cursors.down.isDown || this.sKey.isDown;
+      const left  = this.cursors.left.isDown || this.aKey.isDown;
+      const right = this.cursors.right.isDown || this.dKey.isDown;
 
-      // anim
-      if(v.length() < 1){
-        this.player.anims.stop();
-      } else {
-        if(Math.abs(v.x) > Math.abs(v.y)){
-          this.player.anims.play(v.x>0 ? 'walkRight' : 'walkLeft', true);
-        } else {
-          this.player.anims.play(v.y>0 ? 'walkDown' : 'walkUp', true);
-        }
+      let vx = 0, vy = 0;
+      if(left) vx -= 1;
+      if(right) vx += 1;
+      if(up) vy -= 1;
+      if(down) vy += 1;
+
+      if(vx !== 0 && vy !== 0){
+        const inv = 1/Math.sqrt(2);
+        vx *= inv; vy *= inv;
       }
-      this.player.depth = this.player.y;
+
+      this.player.setVelocity(vx*this.speed, vy*this.speed);
+      this.player.setDepth(this.player.y);
     }
   }
+
   const cfg = {
     type: Phaser.AUTO,
     parent: mountId,
     backgroundColor: '#0a0f15',
     pixelArt: true,
     roundPixels: true,
+    physics: { default:'arcade', arcade:{ gravity:{y:0}, debug:false } },
     scale: {
       mode: Phaser.Scale.RESIZE,
-      autoCenter: Phaser.Scale.CENTER_BOTH
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: '100%',
+      height: '100%'
     },
-    physics: {
-      default: 'arcade',
-      arcade: { debug: false }
-    },
-    scene: [ MainScene ]
+    scene: [MainScene]
   };
 
   const game = new Phaser.Game(cfg);
-  api.destroy = ()=> game.destroy(true);
-  return api;
 
-
+  return {
+    destroy(){
+      game.destroy(true);
+      mount.innerHTML = '';
+    }
+  };
 }
