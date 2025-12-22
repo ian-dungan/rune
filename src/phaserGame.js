@@ -6,28 +6,6 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
   mount.innerHTML = '';
   let api = {};
 
-  const cfg = {
-    type: Phaser.AUTO,
-    parent: mountId,
-    backgroundColor: '#0a0f15',
-    pixelArt: true,
-    roundPixels: true,
-    scale: {
-      mode: Phaser.Scale.RESIZE,
-      autoCenter: Phaser.Scale.CENTER_BOTH
-    },
-    physics: {
-      default: 'arcade',
-      arcade: { debug: false }
-    },
-    scene: [ MainScene ]
-  };
-
-  const game = new Phaser.Game(cfg);
-
-  api.destroy = ()=> game.destroy(true);
-  return api;
-
   async function loadJson(url){
     const r = await fetch(url);
     if(!r.ok) throw new Error(`Failed ${url}: ${r.status}`);
@@ -206,4 +184,26 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       this.player.depth = this.player.y;
     }
   }
+  const cfg = {
+    type: Phaser.AUTO,
+    parent: mountId,
+    backgroundColor: '#0a0f15',
+    pixelArt: true,
+    roundPixels: true,
+    scale: {
+      mode: Phaser.Scale.RESIZE,
+      autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    physics: {
+      default: 'arcade',
+      arcade: { debug: false }
+    },
+    scene: [ MainScene ]
+  };
+
+  const game = new Phaser.Game(cfg);
+  api.destroy = ()=> game.destroy(true);
+  return api;
+
+
 }
