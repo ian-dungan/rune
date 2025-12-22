@@ -80,7 +80,7 @@ export const profiles = {
     const { data, error } = await supabase
       .schema('rune')
       .from('player_profiles')
-      .select('id,user_id,username,display_name,outfit,settings')
+      .select('id,user_id,username,settings,role,muted_until,mute_reason,active_world_id,created_at')
       .eq('user_id', me.id)
       .maybeSingle();
     if(error) return null;
@@ -89,14 +89,24 @@ export const profiles = {
   async createOrUpdateMyProfile(payload){
     const me = await auth.getUser();
     if(!me) return {ok:false, error:'not logged in'};
+
+    // Store character fields inside settings to match your current schema
+    const settings = {
+      ...(payload?.settings || {}),
+      display_name: payload?.display_name || payload?.displayName || null,
+      outfit: payload?.outfit || null
+    };
+
     const { error } = await supabase
       .schema('rune')
       .from('player_profiles')
       .upsert({
         user_id: me.id,
-        display_name: payload.display_name,
-        outfit: payload.outfit
+        // keep username if already set during registration
+        username: payload?.username || undefined,
+        settings
       }, { onConflict: 'user_id' });
+
     if(error) return {ok:false, error:error.message};
     return {ok:true};
   }
@@ -105,6 +115,7 @@ export const profiles = {
 export const chat = (() => {
   const callbacks = new Set();
   let channel = null;
+  let worldId = null;
 
   function emit(m){ callbacks.forEach(cb=>cb(m)); }
 
@@ -116,12 +127,26 @@ export const chat = (() => {
       const me = await auth.getUser();
       if(!me) return;
 
+      // Resolve active world (requires rune.worlds row with slug 'lobby')
+      const { data: wRow, error: wErr } = await supabase
+        .schema('rune')
+        .from('worlds')
+        .select('id,slug')
+        .eq('slug', WORLD_SLUG)
+        .maybeSingle();
+      if(wErr || !wRow?.id){
+        console.warn(`No world configured. Create rune.worlds row with slug '${WORLD_SLUG}'.`, wErr?.message);
+        return;
+      }
+      worldId = wRow.id;
+
       // Load last 50
       const prof = await profiles.getMyProfile();
       const { data } = await supabase
         .schema('rune')
         .from('chat_messages')
         .select('id,message,created_at,user_id')
+        .eq('world_id', worldId)
         .order('created_at', { ascending: true })
         .limit(50);
 
@@ -156,7 +181,7 @@ export const chat = (() => {
       const { error } = await supabase
         .schema('rune')
         .from('chat_messages')
-        .insert({ user_id: me.id, message });
+        .insert({ world_id: worldId, user_id: me.id, message });
       if(error) return {ok:false, error:error.message};
       return {ok:true};
     }
