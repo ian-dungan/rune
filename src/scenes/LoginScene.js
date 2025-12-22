@@ -4,10 +4,17 @@ export default class LoginScene extends Phaser.Scene {
   constructor() { super('LoginScene'); }
 
   preload() {
-    this.load.html('loginform', 'src/scenes/loginform.html');
+    this.load.html('loginform', './src/scenes/loginform.html');
   }
 
   create() {
+    // Ensure DOM container exists before creating form
+    if (!this.game.domContainer) {
+      console.warn('DOM container not ready yet, retrying...');
+      this.time.delayedCall(100, () => this.scene.restart());
+      return;
+    }
+
     this.add.text(640, 80, 'Rune Online', { fontSize: '48px', color: '#fff' }).setOrigin(0.5);
     this.add.text(640, 140, 'Enter a username to begin', { fontSize: '18px', color: '#aaa' }).setOrigin(0.5);
 
