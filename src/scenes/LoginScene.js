@@ -8,11 +8,19 @@ export default class LoginScene extends Phaser.Scene {
   }
 
   create() {
-    // Ensure DOM container exists before creating form
+    // --- Hardened DOM container creation ---
     if (!this.game.domContainer) {
-      console.warn('DOM container not ready yet, retrying...');
-      this.time.delayedCall(100, () => this.scene.restart());
-      return;
+      console.warn('No DOM container detected. Creating one manually...');
+      const container = document.createElement('div');
+      container.classList.add('phaser-dom-container');
+      container.style.position = 'absolute';
+      container.style.left = '0';
+      container.style.top = '0';
+      container.style.pointerEvents = 'none';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      document.body.appendChild(container);
+      this.game.domContainer = container;
     }
 
     this.add.text(640, 80, 'Rune Online', { fontSize: '48px', color: '#fff' }).setOrigin(0.5);
@@ -31,10 +39,8 @@ export default class LoginScene extends Phaser.Scene {
           return;
         }
 
-        // generate fake email
         const fakeEmail = `${username}@rune.local`;
 
-        // Check for duplicate username
         const { data: existingProfiles } = await supabase
           .from('rune.player_profiles')
           .select('username')
@@ -43,7 +49,6 @@ export default class LoginScene extends Phaser.Scene {
 
         let user;
         if (existingProfiles && existingProfiles.length > 0) {
-          // Try login with existing synthetic email
           const { data, error } = await supabase.auth.signInWithPassword({
             email: fakeEmail,
             password
@@ -54,7 +59,6 @@ export default class LoginScene extends Phaser.Scene {
           }
           user = data.user;
         } else {
-          // Sign up new user
           const { data, error } = await supabase.auth.signUp({
             email: fakeEmail,
             password
@@ -64,8 +68,6 @@ export default class LoginScene extends Phaser.Scene {
             return;
           }
           user = data.user;
-
-          // Create profile entry
           await supabase.from('rune.player_profiles').insert([{
             user_id: user.id,
             username
