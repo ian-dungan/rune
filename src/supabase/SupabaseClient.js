@@ -1,2 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-export const supabase = createClient('https://depvgmvmqapfxjwkkhas.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlcHZnbXZtcWFwZnhqd2traGFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NzkzNzgsImV4cCI6MjA4MDU1NTM3OH0.WLkWVbp86aVDnrWRMb-y4gHmEOs9sRpTwvT8hTmqHC0eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlcHZnbXZtcWFwZnhqd2traGFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NzkzNzgsImV4cCI6MjA4MDU1NTM3OH0.WLkWVbp86aVDnrWRMb-y4gHmEOs9sRpTwvT8hTmqHC0');
+
+let SUPABASE_URL, SUPABASE_ANON_KEY;
+
+try {
+  const creds = await import('../../config/private-supabase.js');
+  SUPABASE_URL = creds.SUPABASE_URL;
+  SUPABASE_ANON_KEY = creds.SUPABASE_ANON_KEY;
+  console.log('✅ Supabase credentials loaded from private-supabase.js');
+} catch (err) {
+  console.error('❌ Missing private-supabase.js in /config/. Please create it with your Supabase URL and anon key.');
+}
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
