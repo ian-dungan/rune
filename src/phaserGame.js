@@ -27,7 +27,7 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
 
       // We don't yet know image paths until tilesets.json loads, so we load them in create()
       // but we CAN still preload player sprite with a known path (fallback).
-      this.load.spritesheet('player', 'assets/sprites/player.png', { frameWidth: 32, frameHeight: 32 });
+      this.load.spritesheet('player', './player_sprite.png', { frameWidth: 32, frameHeight: 64 });
     }
 
     async create(){
@@ -71,6 +71,20 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
         return;
       }
 
+// Fallback: if player spritesheet fails to load, generate a simple pixel character
+const ensurePlayerTexture = () => {
+  if(this.textures.exists('player')) return;
+  const g = this.add.graphics();
+  g.fillStyle(0x000000, 0);
+  g.fillStyle(0x000000, 0.25); g.fillEllipse(16, 50, 18, 8);
+  g.fillStyle(0x2c7bd6, 1); g.fillRoundedRect(10, 22, 12, 24, 3);
+  g.fillStyle(0xf2c9a0, 1); g.fillRoundedRect(11, 8, 10, 10, 3);
+  g.fillStyle(0x6b3e1e, 1); g.fillRoundedRect(11, 8, 10, 5, 2);
+  g.generateTexture('player', 32, 64);
+  g.destroy();
+};
+ensurePlayerTexture();
+
       // Fetch player profile (async) but don't block map creation forever.
       try{
         this.profile = await (getPlayerProfile?.() ?? null);
@@ -101,15 +115,18 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       const layerGrass = map.createBlankLayer('ground_grass', tsGrass, 0, 0, this.worldW, this.worldH, 32, 32);
       const layerRoad  = map.createBlankLayer('ground_road',  tsRoad,  0, 0, this.worldW, this.worldH, 32, 32);
       const layerWater = map.createBlankLayer('ground_water', tsWater, 0, 0, this.worldW, this.worldH, 32, 32);
-      const layerDeco  = map.createBlankLayer('decorations',  tsPlant, 0, 0, this.worldW, this.worldH, 32, 32);
-      const layerProps = map.createBlankLayer('props',        tsProps, 0, 0, this.worldW, this.worldH, 32, 32);
+      const layerDeco  = map.createBlankLayer('decorations',  tsPlant, 0, 0, this.worldW, this.worldH, 32, 32); 
+// Explicit render order (depth): keep all ground layers below characters
+layerGrass.setDepth(0);
+layerWater.setDepth(1);
+layerRoad.setDepth(2);
+layerDeco.setDepth(3);
+
 
       layerGrass.skipCull = true;
       layerRoad.skipCull  = true;
       layerWater.skipCull = true;
       layerDeco.skipCull  = true;
-      layerProps.skipCull = true;
-
       const W = this.worldW;
       const H = this.worldH;
 
@@ -164,13 +181,9 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       for(const p of world.props){
         // If generator gives named kinds, map them to tile frames.
         // Using props tileset indices (1-based). If unknown, skip.
-        const frame = p.frame ?? p.tile ?? null;
-        if(frame){
-          layerProps.putTileAt(frame, p.x, p.y);
-        }
-        const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', (frame ? frame-1 : 0));
-        spr.setOrigin(0.5, 0.75);
-        spr.setDepth(spr.y);
+        const frame = p.frame ?? p.tile ?? null;        const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', (frame ? frame-1 : 0));
+        spr.setOrigin(0.5, 0.9);
+        spr.setDepth(1000 + spr.y);
         propGroup.add(spr);
       }
 
@@ -179,8 +192,9 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       const spawnY = world.spawn?.y ?? Math.floor(H/2);
 
       this.player = this.physics.add.sprite(spawnX*32+16, spawnY*32+16, 'player', 0);
-      this.player.setOrigin(0.5, 0.75);
-      this.player.setDepth(this.player.y);
+      this.player.setOrigin(0.5, 0.9);
+      // RPG depth-sorting: draw by feet position, above ground layers
+      this.player.setDepth(1000 + this.player.y);
       this.player.setCollideWorldBounds(true);
 
       // Input
@@ -226,7 +240,7 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       }
 
       this.player.setVelocity(vx*this.speed, vy*this.speed);
-      this.player.setDepth(this.player.y);
+      this.player.setDepth(1000 + this.player.y);
     }
   }
 
