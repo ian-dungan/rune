@@ -18,6 +18,8 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
     }
 
     async create(){
+      console.log('[GAME] Starting create...');
+      
       this.meta = this.cache.json.get('meta') || { seed:'alttp-001', world:{width:256,height:256} };
       this.tiles = this.cache.json.get('tilesets') || null;
 
@@ -42,10 +44,14 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       const missing = ['grass','road','water','plant','props','player'].filter(k => !this.textures.exists(k));
       if(missing.length){
         this.add.text(16, 16, 'Missing: ' + missing.join(', '), { fontSize:'16px', color:'#ff0000' }).setScrollFactor(0);
+        console.error('[GAME] Missing textures:', missing);
         return;
       }
 
+      console.log('[GAME] Generating world...');
       const world = generateWorld(this.meta);
+      console.log('[GAME] World generated:', world);
+      
       const W = world.width, H = world.height;
 
       const map = this.make.tilemap({
@@ -64,7 +70,7 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       const layerWater = map.createBlankLayer('water', tsWater, 0, 0, W, H, 32, 32);
       const layerDeco = map.createBlankLayer('deco', tsPlant, 0, 0, W, H, 32, 32);
 
-      // CRITICAL: All ground layers at depth 0
+      // All layers at depth 0
       layerGrass.setDepth(0);
       layerRoad.setDepth(0);
       layerWater.setDepth(0);
@@ -88,6 +94,7 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       };
 
       // Paint tiles
+      console.log('[GAME] Painting tiles...');
       for(let y=0; y<H; y++){
         for(let x=0; x<W; x++){
           const i = y*W+x;
@@ -108,21 +115,33 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
         }
       }
 
-      // Props as sprites
+      // Props
+      console.log('[GAME] Adding', world.props.length, 'props...');
       for(const p of world.props){
         const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', 0);
         spr.setOrigin(0.5, 0.75);
         spr.setDepth(100);
       }
 
-      // Player
+      // PLAYER - Make VERY visible
       const spawnX = world.spawn?.x ?? Math.floor(W/2);
       const spawnY = world.spawn?.y ?? Math.floor(H/2);
 
+      console.log('[GAME] Creating player at', spawnX, spawnY);
+      
       this.player = this.physics.add.sprite(spawnX*32+16, spawnY*32+16, 'player', 0);
       this.player.setOrigin(0.5, 0.9);
-      this.player.setDepth(200); // ALWAYS above everything
+      this.player.setDepth(10000); // EXTREMELY high depth
+      this.player.setTint(0xff0000); // BRIGHT RED
+      this.player.setScale(2); // DOUBLE SIZE
       this.player.setCollideWorldBounds(true);
+
+      console.log('[GAME] Player created:', this.player);
+
+      // Add a bright circle under player for debugging
+      const marker = this.add.circle(0, 0, 20, 0xffff00, 1);
+      marker.setDepth(9999);
+      this.playerMarker = marker;
 
       // Input
       this.cursors = this.input.keyboard.createCursorKeys();
@@ -134,7 +153,7 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       // Camera
       this.cameras.main.setBounds(0, 0, W*32, H*32);
       this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-      this.cameras.main.setZoom(this.meta.camera?.zoom ?? 2.5);
+      this.cameras.main.setZoom(2.5);
 
       this.events.on('postupdate', () => {
         if(!this.player) return;
@@ -143,7 +162,7 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
         onCoords?.(tx, ty);
       });
 
-      console.log(`[World] Generated • ${W}x${H} • spawn: (${spawnX}, ${spawnY})`);
+      console.log('[GAME] Setup complete!');
     }
 
     update(){
@@ -167,6 +186,11 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       }
 
       this.player.setVelocity(vx*this.speed, vy*this.speed);
+      
+      // Update marker position
+      if(this.playerMarker){
+        this.playerMarker.setPosition(this.player.x, this.player.y + 20);
+      }
     }
   }
 
