@@ -1,4 +1,5 @@
 import { clamp, showToast } from "./util.js";
+import { WorldGen } from "./worldgen.js";
 const TILE=32, CHUNK=32;
 function k(cx,cy){return `${cx},${cy}`;}
 async function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>{console.error("Failed to load:",src);rej(new Error("img "+src));};i.src=src;});}
@@ -53,10 +54,12 @@ export class Game{
       
       // Initialize region cache
       this.regions = new Map();
-      this.REGION_SIZE = 10;
+      this.REGION_SIZE = (this.meta && this.meta.regionChunks) ? this.meta.regionChunks : 10;
+      this.worldMode = (this.meta && this.meta.worldMode) ? String(this.meta.worldMode) : "generated";
+      this.worldgen = new WorldGen(String(this.meta && this.meta.seed ? this.meta.seed : "alttp-continent-001"));
       
-      console.log("Assets loaded. Static world ready (region-based).");
-      showToast("Loaded sprite tiles. Static world ready!");
+      console.log(`Assets loaded. World mode: ${this.worldMode} • seed: ${this.worldgen.seed}`);
+      showToast(`Loaded tiles. World mode: ${this.worldMode}`);
     }catch(err){
       console.error("Failed to load world:",err);
       showToast("Error loading world assets - check console");
@@ -103,57 +106,58 @@ export class Game{
   }
 
   async _chunk(cx,cy){
-    const kk=k(cx,cy);
+    const kk = k(cx,cy);
     if(this.cache.has(kk)) return this.cache.get(kk);
-    
-    // Determine which region this chunk belongs to
-    const rx = Math.floor(cx / this.REGION_SIZE);
-    const ry = Math.floor(cy / this.REGION_SIZE);
-    const regionKey = `${rx}_${ry}`;
-    
-    // Load region if not cached
-    if(!this.regions.has(regionKey)){
-      try{
-        const res = await fetch(`./assets/world/overworld/regions/region_${regionKey}.json`);
-        if(res.ok){
-          const chunks = await res.json();
-          // Cache all chunks from this region
-          for(const chunk of chunks){
-            this.cache.set(k(chunk.cx, chunk.cy), chunk);
+
+    // Prefer deterministic generation unless explicitly in region mode
+    const mode = (this.worldMode || "generated").toLowerCase();
+
+    // Region mode: try to fetch authored region files (cached by regionKey)
+    if(mode === "regions"){
+      const rx = Math.floor(cx / this.REGION_SIZE);
+      const ry = Math.floor(cy / this.REGION_SIZE);
+      const regionKey = `${rx}_${ry}`;
+
+      if(!this._regionLoading) this._regionLoading = new Set();
+      if(!this.regions) this.regions = new Map();
+
+      // Load region once per regionKey
+      if(!this.regions.has(regionKey) && !this._regionLoading.has(regionKey)){
+        this._regionLoading.add(regionKey);
+        try{
+          const res = await fetch(`./assets/world/overworld/regions/region_${regionKey}.json`);
+          if(res.ok){
+            const chunks = await res.json();
+            for(const chunk of chunks){
+              this.cache.set(k(chunk.cx, chunk.cy), chunk);
+            }
+            this.regions.set(regionKey, true);
+            console.log(`Loaded region ${regionKey} (${chunks.length} chunks)`);
+          } else {
+            console.warn(`Region ${regionKey} not found (${res.status})`);
+            this.regions.set(regionKey, false);
           }
-          this.regions.set(regionKey, true);
-          console.log(`Loaded region ${regionKey} (${chunks.length} chunks)`);
-        } else {
-          console.warn(`Region ${regionKey} not found (${res.status})`);
+        }catch(err){
+          console.error(`Error loading region ${regionKey}:`, err);
           this.regions.set(regionKey, false);
+        } finally {
+          this._regionLoading.delete(regionKey);
         }
-      }catch(err){
-        console.error(`Error loading region ${regionKey}:`, err);
-        this.regions.set(regionKey, false);
       }
+
+      // Return chunk if now cached
+      if(this.cache.has(kk)) return this.cache.get(kk);
+
+      // Fallback in region mode: deterministic generation (still stable!)
+      const ch = this.worldgen.generateChunk(cx, cy, this.meta);
+      this.cache.set(kk, ch);
+      return ch;
     }
-    
-    // Return chunk if now cached
-    if(this.cache.has(kk)) return this.cache.get(kk);
-    
-    // Fallback: create grass chunk
-    console.warn(`Using fallback for chunk (${cx},${cy})`);
-    const grassTiles = [];
-    for(let i=0; i<CHUNK*CHUNK; i++) grassTiles.push(Math.floor(Math.random()*8));
-    
-    return {
-      cx,cy,
-      layers:{
-        ground_grass:{tileset:"grass1",data:grassTiles},
-        ground_water:{tileset:"water1",data:new Array(CHUNK*CHUNK).fill(-1)},
-        ground_dirt:{tileset:"dirt1",data:new Array(CHUNK*CHUNK).fill(-1)},
-        shadows:{tileset:"shadowPlant",data:new Array(CHUNK*CHUNK).fill(-1)},
-        objects:{tileset:"plant",data:new Array(CHUNK*CHUNK).fill(-1)},
-        decorations:{tileset:"flowers",data:new Array(CHUNK*CHUNK).fill(-1)},
-        structures:{tileset:"wall",data:new Array(CHUNK*CHUNK).fill(-1)},
-        trees:{tileset:"lpcTreetop",data:new Array(CHUNK*CHUNK).fill(-1)}
-      }
-    };
+
+    // Generated mode: always deterministic
+    const ch = this.worldgen.generateChunk(cx, cy, this.meta);
+    this.cache.set(kk, ch);
+    return ch;
   }
 
   _render(){

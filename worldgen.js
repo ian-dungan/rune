@@ -1,231 +1,253 @@
-// Deterministic overworld generator (A Link to the Past inspired continent).
-// Generates region_{rx}_{ry}.json content on the fly with a fixed seed.
-// No procedural surprises: same seed => same world on every device.
+// Deterministic, ALTTP-inspired continent generator (fixed seed).
+// Generates chunks on-demand, always producing the same world for the same seed.
 
-export const WorldGen = (() => {
-  // --- PRNG helpers (deterministic) ---
-  function xmur3(str){
-    let h = 1779033703 ^ str.length;
-    for (let i=0;i<str.length;i++){
-      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-      h = (h << 13) | (h >>> 19);
-    }
-    return function(){
-      h = Math.imul(h ^ (h >>> 16), 2246822507);
-      h = Math.imul(h ^ (h >>> 13), 3266489909);
-      return (h ^= (h >>> 16)) >>> 0;
-    };
-  }
-  function mulberry32(a){
-    return function(){
-      let t = (a += 0x6D2B79F5);
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-  function rngFrom(seed, x, y){
-    const h = xmur3(`${seed}|${x}|${y}`)();
-    return mulberry32(h);
-  }
+const TILE = 32;
+const CHUNK = 32;
 
-  // Smooth value noise (cheap, good enough for map features)
-  function lerp(a,b,t){ return a + (b-a)*t; }
-  function smoothstep(t){ return t*t*(3-2*t); }
-  function hash2(seed, x, y){
-    // 0..1 deterministic
-    const r = rngFrom(seed, x|0, y|0);
-    return r();
+function xmur3(str){
+  // Simple string hash -> 32-bit
+  let h = 1779033703 ^ str.length;
+  for(let i=0; i<str.length; i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
   }
-  function valueNoise(seed, x, y){
-    const xi = Math.floor(x), yi = Math.floor(y);
-    const xf = x - xi, yf = y - yi;
-    const a = hash2(seed, xi, yi);
-    const b = hash2(seed, xi+1, yi);
-    const c = hash2(seed, xi, yi+1);
-    const d = hash2(seed, xi+1, yi+1);
-    const u = smoothstep(xf), v = smoothstep(yf);
-    return lerp(lerp(a,b,u), lerp(c,d,u), v);
-  }
-  function fbm(seed, x, y){
-    let sum=0, amp=0.5, freq=0.008;
-    for(let i=0;i<5;i++){
-      sum += amp * valueNoise(seed, x*freq, y*freq);
-      amp *= 0.5;
-      freq *= 2;
-    }
-    return sum; // ~0..1
-  }
-
-  // --- World style knobs (tweakable) ---
-  const TILES = {
-    grass: [0,1,2,3],
-    dirt:  [0,1,2],
-    stone: [0,1,2,3],
-    water: [0,1,2,3]
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= (h >>> 16);
+    return h >>> 0;
   };
+}
 
-  function pick(arr, r){ return arr[Math.floor(r()*arr.length)]; }
+function sfc32(a,b,c,d){
+  return function(){
+    a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+    let t = (a + b) | 0;
+    a = b ^ (b >>> 9);
+    b = (c + (c << 3)) | 0;
+    c = (c << 21) | (c >>> 11);
+    d = (d + 1) | 0;
+    t = (t + d) | 0;
+    c = (c + t) | 0;
+    return (t >>> 0) / 4294967296;
+  };
+}
 
-  // Major landmarks in WORLD TILE coordinates (not pixels)
-  function landmarks(seed){
-    // Kakariko-ish town near center-left, castle-ish near center, lake south-east, mountain north-west
-    const base = {
-      town: {x: 2200, y: 2100},
-      castle: {x: 2600, y: 1900},
-      lake: {x: 3200, y: 2600, r: 260},
-      mountain: {x: 1700, y: 1500, r: 420},
-      swamp: {x: 2900, y: 3050, r: 320},
-      desert: {x: 3600, y: 1850, r: 420}
-    };
-    // small deterministic offsets per seed
-    const r = rngFrom(seed, 999, 999);
-    for(const k of Object.keys(base)){
-      base[k].x += Math.floor((r()-0.5)*180);
-      base[k].y += Math.floor((r()-0.5)*180);
+// Hash-based deterministic random for integer coords
+function rand01(seedU32, x, y){
+  // mix x,y with seed
+  let h = seedU32 ^ Math.imul(x, 374761393) ^ Math.imul(y, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= (h >>> 16);
+  return (h >>> 0) / 4294967296;
+}
+
+function lerp(a,b,t){ return a + (b-a)*t; }
+function fade(t){ return t*t*(3-2*t); }
+
+// Value noise with bilinear interpolation (deterministic)
+function valueNoise(seedU32, x, y, scale){
+  const gx = Math.floor(x/scale);
+  const gy = Math.floor(y/scale);
+  const fx = (x/scale) - gx;
+  const fy = (y/scale) - gy;
+
+  const v00 = rand01(seedU32, gx, gy);
+  const v10 = rand01(seedU32, gx+1, gy);
+  const v01 = rand01(seedU32, gx, gy+1);
+  const v11 = rand01(seedU32, gx+1, gy+1);
+
+  const u = fade(fx);
+  const v = fade(fy);
+  const a = lerp(v00, v10, u);
+  const b = lerp(v01, v11, u);
+  return lerp(a, b, v);
+}
+
+function fbm(seedU32, x, y, baseScale){
+  let amp = 1.0, freq = 1.0, sum = 0.0, norm = 0.0;
+  for(let i=0; i<4; i++){
+    const n = valueNoise(seedU32, x*freq, y*freq, baseScale);
+    sum += n * amp;
+    norm += amp;
+    amp *= 0.5;
+    freq *= 2.0;
+  }
+  return sum / norm;
+}
+
+export class WorldGen{
+  constructor(seed){
+    this.seed = seed || "alttp-continent-001";
+    const h = xmur3(this.seed);
+    this.seedU32 = h();
+    // deterministic global RNG for landmark placement (not per-tile)
+    const h2 = xmur3(this.seed + ":rng");
+    this.rng = sfc32(h2(), h2(), h2(), h2());
+    // Landmark anchors (in tile coords) - stable for the seed
+    this.spawnTile = { x: 160, y: 160 }; // default; meta.spawn overrides
+    this.lake = { x: 220, y: 210, r: 18 };
+    this.castle = { x: 170, y: 110 };
+    this.village = { x: 120, y: 165 };
+    this.desert = { x: 280, y: 170 };
+  }
+
+  _applyMeta(meta){
+    if(meta && meta.spawn){
+      this.spawnTile = {
+        x: Math.floor((meta.spawn.x || 0) / TILE),
+        y: Math.floor((meta.spawn.y || 0) / TILE)
+      };
     }
-    return base;
+    // Place some anchors relative to spawn (stable but "designed")
+    this.castle = { x: this.spawnTile.x + 10, y: this.spawnTile.y - 45 };
+    this.village = { x: this.spawnTile.x - 40, y: this.spawnTile.y + 5 };
+    this.lake = { x: this.spawnTile.x + 55, y: this.spawnTile.y + 45, r: 20 };
+    this.desert = { x: this.spawnTile.x + 120, y: this.spawnTile.y + 10 };
   }
 
-  // River function: meandering line from mountain toward lake
-  function riverDistance(seed, x, y, lm){
-    // define param along x axis, compute center y
-    const t = (x - lm.mountain.x) / (lm.lake.x - lm.mountain.x);
-    if(t < -0.2 || t > 1.2) return 9999;
-    const nx = x * 0.004;
-    const meander = (valueNoise(seed+"|river", nx, 0) - 0.5) * 220;
-    const centerY = lerp(lm.mountain.y+80, lm.lake.y-60, t) + meander;
-    return Math.abs(y - centerY);
-  }
+  generateChunk(cx, cy, meta){
+    this._applyMeta(meta);
 
-  function biome(seed, x, y, lm){
-    // Base height
-    const h = fbm(seed+"|h", x, y);
-    // Mountain bump
-    const dxm = x-lm.mountain.x, dym = y-lm.mountain.y;
-    const m = Math.exp(-(dxm*dxm+dym*dym)/(2*lm.mountain.r*lm.mountain.r));
-    // Desert bump
-    const dxd = x-lm.desert.x, dyd=y-lm.desert.y;
-    const des = Math.exp(-(dxd*dxd+dyd*dyd)/(2*lm.desert.r*lm.desert.r));
-    // Swamp lowlands
-    const dxs = x-lm.swamp.x, dys=y-lm.swamp.y;
-    const sw = Math.exp(-(dxs*dxs+dys*dys)/(2*lm.swamp.r*lm.swamp.r));
+    const grass = new Array(CHUNK*CHUNK).fill(-1);
+    const dirt  = new Array(CHUNK*CHUNK).fill(-1);
+    const stone = new Array(CHUNK*CHUNK).fill(-1);
+    const water = new Array(CHUNK*CHUNK).fill(-1);
+    const deco  = new Array(CHUNK*CHUNK).fill(-1);
+    const trees = new Array(CHUNK*CHUNK).fill(-1);
+    const objs  = new Array(CHUNK*CHUNK).fill(-1);
+    const shad  = new Array(CHUNK*CHUNK).fill(-1);
 
-    const height = h + 0.65*m - 0.35*sw;
+    const baseX = cx * CHUNK;
+    const baseY = cy * CHUNK;
 
-    // Lake & river water mask
-    const dxl=x-lm.lake.x, dyl=y-lm.lake.y;
-    const lakeDist = Math.sqrt(dxl*dxl+dyl*dyl);
-    const riverDist = riverDistance(seed, x, y, lm);
-    const water = (lakeDist < lm.lake.r) || (riverDist < 10);
+    for(let ly=0; ly<CHUNK; ly++){
+      for(let lx=0; lx<CHUNK; lx++){
+        const tx = baseX + lx;
+        const ty = baseY + ly;
+        const idx = ly*CHUNK + lx;
 
-    if(water) return "water";
-    if(m > 0.35 && height > 0.75) return "mountain";
-    if(des > 0.35 && height > 0.45) return "desert";
-    if(sw > 0.35) return "swamp";
-    if(height < 0.35) return "meadow";
-    return "forest";
-  }
+        // Macro fields
+        const h = fbm(this.seedU32, tx, ty, 96);        // height-ish
+        const m = fbm(this.seedU32^0xA53A, tx+5000, ty-5000, 128); // moisture
+        const heat = fbm(this.seedU32^0x19F1, tx-8000, ty+2000, 160);
 
-  function tileFor(seed, x, y, kind){
-    const r = rngFrom(seed, x, y);
-    // coarse variation so it doesn't look noisy
-    const v = r();
-    if(kind==="water") return pick(TILES.water, r);
-    if(kind==="stone") return pick(TILES.stone, r);
-    if(kind==="dirt")  return pick(TILES.dirt, r);
-    // grass variants by biome
-    if(kind==="grass"){
-      return (v<0.70)?0:(v<0.88)?1:(v<0.96)?2:3;
-    }
-    return 0;
-  }
+        // Height shaping: gentle continent "slope" so it's not all water
+        // (continent feel, not island)
+        const slope = clamp01(0.35 + 0.65 * (1.0 - Math.abs((ty - this.spawnTile.y)/900)));
+        const height = clamp01(0.25 + 0.75*h) * slope;
 
-  function generateRegion(rx, ry, tilesets, meta){
-    const TILE=meta.tileSize||32;
-    const CHUNK=meta.chunkSize||32;
-    const REGION_CHUNKS=meta.regionChunks||10;
-    const seed = meta.seed || "alttp-continent-001";
-    const lm = landmarks(seed);
+        // River: a wandering band originating from "mountains" north of spawn and feeding the lake
+        const riverWobble = (fbm(this.seedU32^0xBEEF, tx, ty, 48) - 0.5) * 10.0;
+        const riverCenter = lerp(this.castle.y, this.lake.y, clamp01((tx - this.castle.x) / (this.lake.x - this.castle.x))) + riverWobble;
+        const riverWidth = 2.2 + fbm(this.seedU32^0xC0DE, tx, ty, 64) * 1.8;
+        const isRiver = Math.abs(ty - riverCenter) < riverWidth && tx > Math.min(this.castle.x, this.lake.x) - 40 && tx < Math.max(this.castle.x, this.lake.x) + 40;
 
-    const chunks=[];
-    const baseChunkX = rx*REGION_CHUNKS;
-    const baseChunkY = ry*REGION_CHUNKS;
+        // Lake
+        const dxL = tx - this.lake.x;
+        const dyL = ty - this.lake.y;
+        const isLake = (dxL*dxL + dyL*dyL) < (this.lake.r*this.lake.r);
 
-    for(let cY=0;cY<REGION_CHUNKS;cY++){
-      for(let cX=0;cX<REGION_CHUNKS;cX++){
-        const absCx = baseChunkX + cX;
-        const absCy = baseChunkY + cY;
+        // Roads: main cross through spawn + connectors to landmarks
+        const roadWob = (valueNoise(this.seedU32^0xD00D, tx, ty, 64)-0.5) * 2.0;
+        const isMainEW = Math.abs(ty - (this.spawnTile.y + roadWob)) <= 1;
+        const isMainNS = Math.abs(tx - (this.spawnTile.x + roadWob)) <= 1;
 
-        const ground = new Array(CHUNK*CHUNK);
-        const ground_stone = new Array(CHUNK*CHUNK).fill(-1);
-        const ground_water = new Array(CHUNK*CHUNK).fill(-1);
-        const decorations = new Array(CHUNK*CHUNK).fill(-1);
-        const objects = new Array(CHUNK*CHUNK).fill(-1);
-        const shadows = new Array(CHUNK*CHUNK).fill(-1);
+        const isToCastle = distPointToSegment(tx,ty, this.spawnTile.x,this.spawnTile.y, this.castle.x,this.castle.y) < 1.4;
+        const isToVillage = distPointToSegment(tx,ty, this.spawnTile.x,this.spawnTile.y, this.village.x,this.village.y) < 1.4;
+        const isToLake = distPointToSegment(tx,ty, this.spawnTile.x,this.spawnTile.y, this.lake.x,this.lake.y) < 1.4;
 
-        for(let ty=0;ty<CHUNK;ty++){
-          for(let tx=0;tx<CHUNK;tx++){
-            const worldTileX = absCx*CHUNK + tx;
-            const worldTileY = absCy*CHUNK + ty;
-            const b = biome(seed, worldTileX, worldTileY, lm);
+        const isRoad = isMainEW || isMainNS || isToCastle || isToVillage || isToLake;
 
-            const idx = ty*CHUNK + tx;
-            if(b==="water"){
-              ground[idx] = tileFor(seed, worldTileX, worldTileY, "grass"); // keep base, doesn't matter
-              ground_water[idx] = tileFor(seed, worldTileX, worldTileY, "water");
-            }else{
-              ground[idx] = tileFor(seed, worldTileX, worldTileY, "grass");
-              // simple biome tinting by swapping some grass to dirt
-              if(b==="desert" && rngFrom(seed+"|d", worldTileX, worldTileY)() < 0.35){
-                // dirt under desert (use ground_dirt if you add it later)
-                // for now we just vary grass tile more
-              }
-              if(b==="swamp" && rngFrom(seed+"|s", worldTileX, worldTileY)() < 0.18){
-                decorations[idx] = 0; // placeholder plant tile index
-              }
-            }
+        // Biomes
+        const isMountain = height > 0.78;
+        const isForest = (m > 0.58 && height > 0.38) && heat < 0.62;
+        const isDesert = (heat > 0.68 && m < 0.42 && height > 0.35) || (dist2(tx,ty,this.desert.x,this.desert.y) < 45*45);
+
+        // Water first
+        if(isLake || isRiver || height < 0.20){
+          water[idx] = 0; // base water tile
+          // add occasional water sparkle/variation
+          if(rand01(this.seedU32, tx, ty) > 0.92) water[idx] = 1;
+          continue;
+        }
+
+        // Ground
+        if(isRoad){
+          stone[idx] = 0;
+          // widen roads slightly on the mains
+          if(isMainEW && Math.abs(ty - this.spawnTile.y) <= 0) stone[idx] = 0;
+        } else if(isMountain){
+          stone[idx] = (rand01(this.seedU32, tx, ty) > 0.7) ? 3 : 2;
+        } else if(isDesert){
+          dirt[idx] = (rand01(this.seedU32^0x3333, tx, ty) > 0.6) ? 2 : 1;
+        } else {
+          // lush grass with subtle variation
+          const r = rand01(this.seedU32^0x1234, tx, ty);
+          grass[idx] = (r < 0.78) ? 0 : (r < 0.92 ? 1 : 2);
+          // occasional dirt patches for texture
+          if(rand01(this.seedU32^0x2222, tx, ty) > 0.985) dirt[idx] = 0;
+        }
+
+        // Decorations (flowers/tufts)
+        if(!isRoad && !isMountain){
+          const p = rand01(this.seedU32^0xF00D, tx, ty);
+          if(p > 0.995 && !isDesert) deco[idx] = 0; // flower
+          else if(p > 0.99) deco[idx] = 1;          // another flower
+        }
+
+        // Forest trees & bushes
+        if(isForest && !isRoad && !isMountain){
+          const t = rand01(this.seedU32^0xCAFE, tx, ty);
+          if(t > 0.965){
+            // treetop tile indices: keep within 0-7
+            trees[idx] = Math.floor(rand01(this.seedU32^0xBADA, tx, ty) * 8);
+            // subtle shadow under trees (from shadowPlant sheet)
+            shad[idx] = 0;
+          } else if(t > 0.94){
+            // bush from plant tileset (use a few known bush-ish indices)
+            const b = [96,98,100,102,104];
+            objs[idx] = b[Math.floor(rand01(this.seedU32^0xB055, tx, ty) * b.length)];
+            shad[idx] = 16; // soft shadow
           }
         }
 
-        // Deterministic "road graph": draw major roads in world space (stone layer)
-        // Vertical main road near castle/town
-        const roadX = lm.castle.x - 40;
-        const roadY = lm.town.y + 10;
-        for(let ty=0;ty<CHUNK;ty++){
-          for(let tx=0;tx<CHUNK;tx++){
-            const worldTileX = absCx*CHUNK + tx;
-            const worldTileY = absCy*CHUNK + ty;
-            const idx = ty*CHUNK + tx;
-
-            // North-south road
-            if(Math.abs(worldTileX - roadX) <= 1 && Math.abs(worldTileY - roadY) < 900){
-              if(ground_water[idx] === -1) ground_stone[idx] = tileFor(seed, worldTileX, worldTileY, "stone");
-            }
-            // East-west road connecting town -> castle -> desert
-            const ewY = lm.castle.y + 10;
-            if(Math.abs(worldTileY - ewY) <= 1 && worldTileX > lm.town.x-260 && worldTileX < lm.desert.x+260){
-              if(ground_water[idx] === -1) ground_stone[idx] = tileFor(seed, worldTileX, worldTileY, "stone");
-            }
-          }
+        // Landmarks: small stone "ruin" clusters near village/castle/lake
+        if(dist2(tx,ty,this.village.x,this.village.y) < 14*14 && rand01(this.seedU32^0x7777, tx, ty) > 0.992){
+          objs[idx] = 40; // props-ish index (adjustable)
         }
-
-        chunks.push({
-          cx: absCx,
-          cy: absCy,
-          layers: {
-            ground: { tileset: "grass", data: ground },
-            ground_water: { tileset: "water1", data: ground_water },
-            ground_stone: { tileset: "stone", data: ground_stone },
-            decorations: { tileset: "plant", data: decorations },
-            shadows: { tileset: "shadowPlant", data: shadows },
-            objects: { tileset: "plant", data: objects }
-          }
-        });
+        if(dist2(tx,ty,this.castle.x,this.castle.y) < 16*16 && rand01(this.seedU32^0x8888, tx, ty) > 0.991){
+          stone[idx] = 5;
+        }
       }
     }
-    return chunks;
-  }
 
-  return { generateRegion };
-})();
+    return {
+      cx, cy,
+      layers: {
+        ground_grass: { tileset: "grass1", data: grass },
+        ground_dirt:  { tileset: "dirt1",  data: dirt },
+        ground_stone: { tileset: "stone",  data: stone },
+        ground_water: { tileset: "water1", data: water },
+        shadows:      { tileset: "shadowPlant", data: shad },
+        decorations:  { tileset: "flowers", data: deco },
+        trees:        { tileset: "lpcTreetop", data: trees },
+        objects:      { tileset: "plant", data: objs }
+      }
+    };
+  }
+}
+
+function clamp01(v){ return v < 0 ? 0 : (v > 1 ? 1 : v); }
+function dist2(x,y,x2,y2){ const dx=x-x2, dy=y-y2; return dx*dx+dy*dy; }
+function distPointToSegment(px,py,x1,y1,x2,y2){
+  const vx=x2-x1, vy=y2-y1;
+  const wx=px-x1, wy=py-y1;
+  const c1 = vx*wx + vy*wy;
+  if(c1 <= 0) return Math.hypot(px-x1, py-y1);
+  const c2 = vx*vx + vy*vy;
+  if(c2 <= c1) return Math.hypot(px-x2, py-y2);
+  const b = c1 / c2;
+  const bx = x1 + b*vx, by = y1 + b*vy;
+  return Math.hypot(px-bx, py-by);
+}
