@@ -1,0 +1,45 @@
+{
+  "tileSize": 32,
+  "tilesets": {
+    "grass": {
+      "image": "assets/tiles/grass.png",
+      "columns": 8,
+      "rows": 8
+    },
+    "road": {
+      "image": "assets/tiles/road.png",
+      "columns": 24,
+      "rows": 24
+    },
+    "water": {
+      "image": "assets/tiles/water.png",
+      "columns": 24,
+      "rows": 15
+    },
+    "props": {
+      "image": "assets/tiles/props.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "plant": {
+      "image": "assets/tiles/plant.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "struct": {
+      "image": "assets/tiles/struct.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "walls": {
+      "image": "assets/tiles/walls.png",
+      "columns": 16,
+      "rows": 16
+    },
+    "player": {
+      "image": "assets/sprites/player.png",
+      "frameWidth": 32,
+      "frameHeight": 32
+    }
+  }
+}
