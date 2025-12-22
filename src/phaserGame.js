@@ -4,130 +4,78 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
   const mount = document.getElementById(mountId);
   mount.innerHTML = '';
 
-  const WORLD_SLUG = (window.RUNE_WORLD_SLUG || 'lobby');
-
   class MainScene extends Phaser.Scene {
     constructor(){
       super('MainScene');
       this.player = null;
-      this.cursors = null;
-      this.wKey = this.aKey = this.sKey = this.dKey = null;
       this.speed = 160;
-      this.worldW = 0;
-      this.worldH = 0;
-      this.meta = null;
-      this.tiles = null;
-      this.profile = null;
     }
 
     preload(){
-      // Load config via Phaser loader (no async fetch in preload)
       this.load.json('meta', './meta.json');
       this.load.json('tilesets', './tilesets.json');
-
-      // Player sprite:
-      // Use the repo-root sprite sheet (player_sprite.png) so the character isn't a placeholder block.
-      // This sheet is 32x64 frames.
       this.load.spritesheet('player', './player_sprite.png', { frameWidth: 32, frameHeight: 64 });
     }
 
     async create(){
-      this.meta = this.cache.json.get('meta') || { seed:'alttp-continent-001', world:{width:256,height:256} };
+      this.meta = this.cache.json.get('meta') || { seed:'alttp-001', world:{width:256,height:256} };
       this.tiles = this.cache.json.get('tilesets') || null;
 
       if(!this.tiles?.tilesets){
-        this.add.text(16, 16, 'Missing tilesets.json in repo root', { fontFamily:'monospace', fontSize:'16px', color:'#ff6b6b' })
-          .setScrollFactor(0);
+        this.add.text(16, 16, 'Missing tilesets.json', { fontSize:'16px', color:'#ff0000' }).setScrollFactor(0);
         return;
       }
 
-      // Enqueue tileset images now that we know their paths.
-      // Note: Loader can be used inside create; we wait for completion.
       const ts = this.tiles.tilesets;
-
-      // Set base path relative to page root so GitHub Pages subpaths work.
-      // (Do NOT use module-relative paths here.)
       this.load.setBaseURL('');
       this.load.image('grass', ts.grass.image);
-      this.load.image('road',  ts.road.image);
+      this.load.image('road', ts.road.image);
       this.load.image('water', ts.water.image);
       this.load.image('plant', ts.plant.image);
       this.load.image('props', ts.props.image);
-
-      // Optional extras if present in tilesets.json
-      if(ts.struct?.image) this.load.image('struct', ts.struct.image);
-      if(ts.walls?.image)  this.load.image('walls',  ts.walls.image);
 
       await new Promise((resolve) => {
         this.load.once(Phaser.Loader.Events.COMPLETE, resolve);
         this.load.start();
       });
 
-      // If any textures still missing, show a clear message.
-      const needed = ['grass','road','water','plant','props','player'];
-      const missing = needed.filter(k => !this.textures.exists(k));
+      const missing = ['grass','road','water','plant','props','player'].filter(k => !this.textures.exists(k));
       if(missing.length){
-        this.add.text(16, 16, 'Missing textures: ' + missing.join(', '), { fontFamily:'monospace', fontSize:'16px', color:'#ff6b6b' })
-          .setScrollFactor(0);
+        this.add.text(16, 16, 'Missing: ' + missing.join(', '), { fontSize:'16px', color:'#ff0000' }).setScrollFactor(0);
         return;
       }
 
-      // Fetch player profile (async) but don't block map creation forever.
-      try{
-        this.profile = await (getPlayerProfile?.() ?? null);
-      }catch(e){
-        console.warn('[Profile] getPlayerProfile failed:', e);
-        this.profile = null;
-      }
-
       const world = generateWorld(this.meta);
-      this.worldW = world.width;
-      this.worldH = world.height;
+      const W = world.width, H = world.height;
 
-      // Tilemap setup
       const map = this.make.tilemap({
-        tileWidth: 32,
-        tileHeight: 32,
-        width: this.worldW,
-        height: this.worldH
+        tileWidth: 32, tileHeight: 32,
+        width: W, height: H
       });
 
       const tsGrass = map.addTilesetImage('grass', 'grass', 32, 32, 0, 0, 1);
-      const tsRoad  = map.addTilesetImage('road',  'road',  32, 32, 0, 0, 1);
+      const tsRoad = map.addTilesetImage('road', 'road', 32, 32, 0, 0, 1);
       const tsWater = map.addTilesetImage('water', 'water', 32, 32, 0, 0, 1);
       const tsPlant = map.addTilesetImage('plant', 'plant', 32, 32, 0, 0, 1);
       const tsProps = map.addTilesetImage('props', 'props', 32, 32, 0, 0, 1);
 
-      // Layers: base -> overlays
-      const layerGrass = map.createBlankLayer('ground_grass', tsGrass, 0, 0, this.worldW, this.worldH, 32, 32);
-      const layerRoad  = map.createBlankLayer('ground_road',  tsRoad,  0, 0, this.worldW, this.worldH, 32, 32);
-      const layerWater = map.createBlankLayer('ground_water', tsWater, 0, 0, this.worldW, this.worldH, 32, 32);
-      const layerDeco  = map.createBlankLayer('decorations',  tsPlant, 0, 0, this.worldW, this.worldH, 32, 32);
-      const layerProps = map.createBlankLayer('props',        tsProps, 0, 0, this.worldW, this.worldH, 32, 32);
+      const layerGrass = map.createBlankLayer('grass', tsGrass, 0, 0, W, H, 32, 32);
+      const layerRoad = map.createBlankLayer('road', tsRoad, 0, 0, W, H, 32, 32);
+      const layerWater = map.createBlankLayer('water', tsWater, 0, 0, W, H, 32, 32);
+      const layerDeco = map.createBlankLayer('deco', tsPlant, 0, 0, W, H, 32, 32);
 
-      // CRITICAL: Ground layers MUST be below player (depth < 1000)
+      // CRITICAL: All ground layers at depth 0
       layerGrass.setDepth(0);
-      layerWater.setDepth(1);
-      layerRoad.setDepth(2);
-      layerDeco.setDepth(3);
-      layerProps.setDepth(4);
-      layerProps.setAlpha(0); // invisible, just for data
+      layerRoad.setDepth(0);
+      layerWater.setDepth(0);
+      layerDeco.setDepth(0);
 
-      layerGrass.skipCull = true;
-      layerRoad.skipCull  = true;
-      layerWater.skipCull = true;
-      layerDeco.skipCull  = true;
-      layerProps.skipCull = true;
-
-      const W = this.worldW;
-      const H = this.worldH;
-
+      // Auto-tile helper
       const tileAt = (arr, x, y) => {
         if(x<0 || y<0 || x>=W || y>=H) return 0;
         return arr[y*W + x];
       };
 
-      // Autotile 4-neighborhood helper
       const autoIndex = (arr, x, y) => {
         const center = tileAt(arr, x, y);
         if(!center) return 0;
@@ -139,43 +87,32 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
         return AUTOTILE_4BIT[mask] || center;
       };
 
-      // Paint layers
-      for(let y=0;y<H;y++){
-        for(let x=0;x<W;x++){
+      // Paint tiles
+      for(let y=0; y<H; y++){
+        for(let x=0; x<W; x++){
           const i = y*W+x;
-
-          // grass always
-          const g = world.layers.grass[i] || 1;
-          layerGrass.putTileAt(g, x, y);
-
-          // water autotile
+          
+          layerGrass.putTileAt(world.layers.grass[i], x, y);
+          
           if(world.layers.water[i]){
-            const w = autoIndex(world.layers.water, x, y);
-            layerWater.putTileAt(w, x, y);
+            layerWater.putTileAt(autoIndex(world.layers.water, x, y), x, y);
           }
-
-          // road autotile
+          
           if(world.layers.road[i]){
-            const r = autoIndex(world.layers.road, x, y);
-            layerRoad.putTileAt(r, x, y);
+            layerRoad.putTileAt(autoIndex(world.layers.road, x, y), x, y);
           }
-
-          // deco optional
+          
           if(world.layers.deco[i]){
             layerDeco.putTileAt(world.layers.deco[i], x, y);
           }
         }
       }
 
-      // Props: spawn as sprites above ground, y-sorted with player
-      const propGroup = this.add.group();
+      // Props as sprites
       for(const p of world.props){
-        // Always use frame 0 (first tile in props sheet)
         const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', 0);
         spr.setOrigin(0.5, 0.75);
-        // Props at depth 500 + y position for proper RPG feel
-        spr.setDepth(500 + spr.y);
-        propGroup.add(spr);
+        spr.setDepth(100);
       }
 
       // Player
@@ -183,10 +120,8 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       const spawnY = world.spawn?.y ?? Math.floor(H/2);
 
       this.player = this.physics.add.sprite(spawnX*32+16, spawnY*32+16, 'player', 0);
-      // Origin closer to feet so y-sorting feels correct.
       this.player.setOrigin(0.5, 0.9);
-      // Player ALWAYS on top of ground (depth 1000+)
-      this.player.setDepth(1000);
+      this.player.setDepth(200); // ALWAYS above everything
       this.player.setCollideWorldBounds(true);
 
       // Input
@@ -197,11 +132,10 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       this.dKey = this.input.keyboard.addKey('D');
 
       // Camera
-      this.cameras.main.setBounds(0,0,W*32,H*32);
+      this.cameras.main.setBounds(0, 0, W*32, H*32);
       this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-      this.cameras.main.setZoom(this.meta.camera?.zoom ?? 2);
+      this.cameras.main.setZoom(this.meta.camera?.zoom ?? 2.5);
 
-      // UI callbacks
       this.events.on('postupdate', () => {
         if(!this.player) return;
         const tx = Math.floor(this.player.x/32);
@@ -209,15 +143,15 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
         onCoords?.(tx, ty);
       });
 
-      console.log(`[World] Mode: generated • seed: ${this.meta.seed || 'alttp'} • size: ${W}x${H} • world: ${WORLD_SLUG}`);
+      console.log(`[World] Generated • ${W}x${H} • spawn: (${spawnX}, ${spawnY})`);
     }
 
     update(){
       if(!this.player) return;
 
-      const up    = this.cursors.up.isDown || this.wKey.isDown;
-      const down  = this.cursors.down.isDown || this.sKey.isDown;
-      const left  = this.cursors.left.isDown || this.aKey.isDown;
+      const up = this.cursors.up.isDown || this.wKey.isDown;
+      const down = this.cursors.down.isDown || this.sKey.isDown;
+      const left = this.cursors.left.isDown || this.aKey.isDown;
       const right = this.cursors.right.isDown || this.dKey.isDown;
 
       let vx = 0, vy = 0;
@@ -226,13 +160,13 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       if(up) vy -= 1;
       if(down) vy += 1;
 
-      if(vx !== 0 && vy !== 0){
+      if(vx && vy){
         const inv = 1/Math.sqrt(2);
-        vx *= inv; vy *= inv;
+        vx *= inv;
+        vy *= inv;
       }
 
       this.player.setVelocity(vx*this.speed, vy*this.speed);
-      // Player stays at fixed depth 1000 (always above ground)
     }
   }
 
