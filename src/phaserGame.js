@@ -105,21 +105,13 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       const layerDeco  = map.createBlankLayer('decorations',  tsPlant, 0, 0, this.worldW, this.worldH, 32, 32);
       const layerProps = map.createBlankLayer('props',        tsProps, 0, 0, this.worldW, this.worldH, 32, 32);
 
-      // --- Draw order / depth ---
-      // Tilemap layers are large display objects; if they sit above the player you can get the
-      // "player is stuck behind the ground" effect. We force a strict depth stack:
-      //   base ground < water < roads < small deco < player/props (y-sorted)
+      // CRITICAL: Ground layers MUST be below player (depth < 1000)
       layerGrass.setDepth(0);
-      layerWater.setDepth(5);
-      layerRoad.setDepth(10);
-      layerDeco.setDepth(20);
-
-      // Do not visually stamp the props tile layer (we draw props as sprites for proper y-sorting).
-      // Keeping the layer around (invisible) leaves room for future collision/picking data.
-      layerProps.setDepth(30);
-      layerProps.setAlpha(0);
-
-      // (Depth stack already set above.)
+      layerWater.setDepth(1);
+      layerRoad.setDepth(2);
+      layerDeco.setDepth(3);
+      layerProps.setDepth(4);
+      layerProps.setAlpha(0); // invisible, just for data
 
       layerGrass.skipCull = true;
       layerRoad.skipCull  = true;
@@ -175,13 +167,14 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
         }
       }
 
-      // Props: spawn as sprites so depth works
+      // Props: spawn as sprites above ground, y-sorted with player
       const propGroup = this.add.group();
       for(const p of world.props){
         // Always use frame 0 (first tile in props sheet)
         const spr = this.add.sprite(p.x*32+16, p.y*32+16, 'props', 0);
         spr.setOrigin(0.5, 0.75);
-        spr.setDepth(10000 + spr.y);
+        // Props at depth 500 + y position for proper RPG feel
+        spr.setDepth(500 + spr.y);
         propGroup.add(spr);
       }
 
@@ -192,8 +185,8 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       this.player = this.physics.add.sprite(spawnX*32+16, spawnY*32+16, 'player', 0);
       // Origin closer to feet so y-sorting feels correct.
       this.player.setOrigin(0.5, 0.9);
-      // Always above ground layers.
-      this.player.setDepth(10000 + this.player.y);
+      // Player ALWAYS on top of ground (depth 1000+)
+      this.player.setDepth(1000);
       this.player.setCollideWorldBounds(true);
 
       // Input
@@ -239,8 +232,7 @@ export function bootGame({ mountId, onCoords, getPlayerProfile }){
       }
 
       this.player.setVelocity(vx*this.speed, vy*this.speed);
-      // RPG depth sort: compare by feet position, always above ground layers.
-      this.player.setDepth(10000 + this.player.y);
+      // Player stays at fixed depth 1000 (always above ground)
     }
   }
 
