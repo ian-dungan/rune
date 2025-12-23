@@ -1,5 +1,5 @@
 // LoginScene.js
-import Phaser from '../lib/phaser.js';
+import Phaser from '../lib/phaser.esm.js';
 import { supabase } from '../supabase/SupabaseClient.js';
 
 export default class LoginScene extends Phaser.Scene {
