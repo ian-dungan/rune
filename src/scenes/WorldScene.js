@@ -1,29 +1,35 @@
-import { supabase } from '../supabase/SupabaseClient.js';
-import { getOrCreatePlayerState, updatePlayerPosition, subscribeToPlayerStates } from '../supabase/PlayerState.js';
 import Player from '../player/Player.js';
+import MobileControls from '../player/MobileControls.js';
 
 export default class WorldScene extends Phaser.Scene {
   constructor() { super('WorldScene'); }
 
-  async create() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      this.scene.start('LoginScene');
-      return;
+  preload() {
+    this.load.image('tileset', 'assets/images/tileset.png');
+    this.load.tilemapTiledJSON('town', 'assets/maps/town.json');
+    this.load.spritesheet('knight', 'assets/images/knight.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.audio('ambient', 'assets/audio/ambient.mp3');
+    this.load.audio('step', 'assets/audio/step_grass.wav');
+  }
+
+  create({ username }) {
+    this.sound.play('ambient', { loop: true, volume: 0.4 });
+    const map = this.make.tilemap({ key: 'town' });
+    const tileset = map.addTilesetImage('tileset', 'tileset');
+    map.createLayer('Ground', tileset, 0, 0);
+
+    this.player = new Player(this, 400, 300, 'knight');
+    this.cameras.main.startFollow(this.player);
+
+    this.keys = this.input.keyboard.addKeys('W,A,S,D');
+    if (/Mobi|Android/i.test(navigator.userAgent)) {
+      new MobileControls(this, this.player);
     }
-    const world_id = 'demo-world';
-    this.world_id = world_id;
-    this.playerState = await getOrCreatePlayerState(user.id, world_id);
-    const map = this.make.tilemap({ key: 'world' });
-    const tileset = map.addTilesetImage('grass', 'grass');
-    const ground = map.createLayer('Ground', [tileset], 0, 0);
-    this.player = new Player(this, 400, 300, 'player');
-    this.cameras.main.startFollow(this.player.sprite);
-    this.cameras.main.setZoom(3.5);
-    subscribeToPlayerStates(world_id, payload => {});
+
+    this.add.text(16, 16, `Welcome, ${username}`, { fontSize: '20px', color: '#fff' }).setScrollFactor(0);
   }
 
   update() {
-    if(this.player) this.player.update();
+    if (!/Mobi|Android/i.test(navigator.userAgent)) this.player.handleInput(this.keys);
   }
 }
