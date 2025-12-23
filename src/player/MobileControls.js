@@ -6,8 +6,8 @@ export default class MobileControls {
   }
 
   createJoystick() {
-    const base = this.scene.add.circle(100, 600, 60, 0x000000, 0.3).setScrollFactor(0);
-    const stick = this.scene.add.circle(100, 600, 30, 0xffffff, 0.5).setScrollFactor(0);
+    const base = this.scene.add.circle(120, 600, 60, 0x000000, 0.25).setScrollFactor(0);
+    const stick = this.scene.add.circle(120, 600, 30, 0xffffff, 0.5).setScrollFactor(0);
 
     let dragging = false;
     this.scene.input.on('pointerdown', (p) => {
