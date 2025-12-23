@@ -6,6 +6,7 @@ export default class Player {
     this.keys = scene.input.keyboard.addKeys('W,A,S,D,SHIFT');
     this.speed = 180;
     this.runSpeed = 260;
+    this.facing = 'down'; // up|down|left|right
 
     // Animation creation
     const anims = ['idle','walk','run','jump','attack1','attack2','attack3','defend','hurt','death'];
@@ -46,6 +47,30 @@ export default class Player {
 
     sprite.body.setVelocity(vx, vy);
 
+    // Determine facing direction (dominant axis) so up/down don't look like "walking right"
+    if (vx !== 0 || vy !== 0) {
+      if (Math.abs(vx) >= Math.abs(vy)) {
+        this.facing = vx > 0 ? 'right' : 'left';
+      } else {
+        this.facing = vy > 0 ? 'down' : 'up';
+      }
+    }
+
+    // Apply a simple orientation for placeholder 1-direction sprites:
+    // - right: normal
+    // - left: flipX
+    // - up/down: rotate (until we add true 4-direction sheets)
+    sprite.setFlipX(false);
+    sprite.setRotation(0);
+
+    if (this.facing === 'left') {
+      sprite.setFlipX(true);
+    } else if (this.facing === 'up') {
+      sprite.setRotation(-Math.PI / 2);
+    } else if (this.facing === 'down') {
+      sprite.setRotation(Math.PI / 2);
+    }
+
     if (vx !== 0 || vy !== 0) {
       sprite.anims.play(k?.SHIFT?.isDown ? 'run' : 'walk', true);
     } else {
@@ -53,5 +78,6 @@ export default class Player {
       sprite.anims.stop();
       sprite.setTexture('IDLE', 0);
     }
+
 }
 }
