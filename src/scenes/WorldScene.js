@@ -1,15 +1,27 @@
 import Player from '../player/Player.js';
-export default class WorldScene extends Phaser.Scene{
-constructor(){super('WorldScene');}
-preload(){
-this.load.tilemapTiledJSON('world','assets/maps/world.json');
-this.load.tilemapTiledJSON('world_art','assets/maps/world_art.json');
-this.load.image('world_art','assets/maps/world_art.png');
-this.load.spritesheet('player','assets/sprites/player.png',{frameWidth:32,frameHeight:48});
-['plains','forest','desert','snow','swamp','castle'].forEach(m=>this.load.audio(m,`assets/music/${m}_theme.mp3`));
+import { supabase } from '../supabase/SupabaseClient.js';
+
+export default class WorldScene extends Phaser.Scene {
+  constructor() { super('WorldScene'); }
+  preload() {
+    this.load.tilemapTiledJSON('world', 'assets/maps/world.json');
+    this.load.image('world_art', 'assets/maps/world_art.png');
+
+    const animations = [
+      'ATTACK 1','ATTACK 2','ATTACK 3','DEATH','DEFEND',
+      'HURT','IDLE','JUMP','RUN','WALK'
+    ];
+    animations.forEach(name => {
+      this.load.spritesheet(name, `assets/sprites/${name}.png`, {
+        frameWidth: 84, frameHeight: 84
+      });
+    });
+  }
+  create() {
+    this.map = this.add.image(0, 0, 'world_art').setOrigin(0, 0);
+    this.player = new Player(this, 2000, 2000);
+    this.cameras.main.startFollow(this.player.sprite, true, 0.08, 0.08);
+    this.cameras.main.setZoom(2.5);
+  }
+  update() { this.player.update(); }
 }
-create(){
-this.add.text(100,100,'Welcome to Runeworld Prime',{fontSize:'32px',fill:'#fff'});
-this.player=new Player(this,400,300,'player');
-}
-update(){this.player.update();}}

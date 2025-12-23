@@ -1,11 +1,1 @@
-{
-  "info": "classic grid map placeholder",
-  "regions": [
-    "plains",
-    "forest",
-    "desert",
-    "snow",
-    "swamp",
-    "castle"
-  ]
-}
+{ "name": "Runeworld Prime Map", "version": 1.0 }
