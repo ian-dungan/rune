@@ -1,5 +1,4 @@
-// LoginScene.js
-import Phaser from '../lib/phaser.esm.js';
+import * as Phaser from '../lib/phaser.esm.js';
 import { supabase } from '../supabase/SupabaseClient.js';
 
 export default class LoginScene extends Phaser.Scene {
@@ -38,7 +37,7 @@ export default class LoginScene extends Phaser.Scene {
       <input id="username" type="text" placeholder="Adventurer123"
              style="padding:10px; border-radius:6px; width:200px;"/>
       <br><br>
-      <button id="loginBtn" 
+      <button id="loginBtn"
               style="padding:10px 20px; border-radius:8px; cursor:pointer;">Login</button>
     `;
 
@@ -62,6 +61,7 @@ export default class LoginScene extends Phaser.Scene {
 
       if (existing) {
         console.log('✅ Username exists, logging in...');
+        container.remove();
         this.scene.start('WorldScene', { username });
       } else {
         alert('No such adventurer found. Please register in Supabase first.');
@@ -69,4 +69,3 @@ export default class LoginScene extends Phaser.Scene {
     });
   }
 }
-
