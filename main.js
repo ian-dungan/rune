@@ -5,14 +5,10 @@ const config = {
   type: Phaser.AUTO,
   width: 1280,
   height: 720,
-  pixelArt: true,
   backgroundColor: '#1e1e1e',
   dom: { createContainer: true },
-  physics: {
-    default: 'arcade',
-    arcade: { gravity: { y: 0 }, debug: false }
-  },
-  scene: [LoginScene, WorldScene]
+  physics: { default: 'arcade', arcade: { gravity: { y: 0 } } },
+  scene: [LoginScene, WorldScene],
+  pixelArt: true
 };
-
 new Phaser.Game(config);
