@@ -20,16 +20,17 @@ export default class WorldScene extends Phaser.Scene {
 
     this.player = new Player(this, 400, 300, 'knight');
     this.cameras.main.startFollow(this.player);
-
     this.keys = this.input.keyboard.addKeys('W,A,S,D');
+
     if (/Mobi|Android/i.test(navigator.userAgent)) {
       new MobileControls(this, this.player);
+      console.log('📱 Mobile controls active');
     }
 
     this.add.text(16, 16, `Welcome, ${username}`, { fontSize: '20px', color: '#fff' }).setScrollFactor(0);
   }
 
-  update() {
-    if (!/Mobi|Android/i.test(navigator.userAgent)) this.player.handleInput(this.keys);
+  update(t, delta) {
+    if (!/Mobi|Android/i.test(navigator.userAgent)) this.player.update(this.keys, delta);
   }
 }
