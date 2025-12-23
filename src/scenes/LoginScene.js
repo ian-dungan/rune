@@ -1,81 +1,44 @@
 import { supabase } from '../supabase/SupabaseClient.js';
 
 export default class LoginScene extends Phaser.Scene {
-  constructor() { super('LoginScene'); }
+  constructor() {
+    super('LoginScene');
+  }
 
   preload() {
-    this.load.html('loginform', './src/scenes/loginform.html');
+    this.load.image('ui_parchment', 'assets/images/ui_parchment.png');
   }
 
   create() {
-    // --- Hardened DOM container creation ---
-    if (!this.game.domContainer) {
-      console.warn('No DOM container detected. Creating one manually...');
-      const container = document.createElement('div');
-      container.classList.add('phaser-dom-container');
-      container.style.position = 'absolute';
-      container.style.left = '0';
-      container.style.top = '0';
-      container.style.pointerEvents = 'none';
-      container.style.width = '100%';
-      container.style.height = '100%';
-      document.body.appendChild(container);
-      this.game.domContainer = container;
-    }
+    this.add.image(640, 360, 'ui_parchment').setAlpha(0.8);
+    this.add.text(640, 200, 'Rune', { fontSize: '72px', color: '#fff', fontFamily: 'Georgia' }).setOrigin(0.5);
 
-    this.add.text(640, 80, 'Rune Online', { fontSize: '48px', color: '#fff' }).setOrigin(0.5);
-    this.add.text(640, 140, 'Enter a username to begin', { fontSize: '18px', color: '#aaa' }).setOrigin(0.5);
+    const usernameInput = this.add.dom(640, 400, 'input', {
+      width: '220px',
+      padding: '10px',
+      fontSize: '18px',
+      borderRadius: '8px',
+      textAlign: 'center'
+    }, '').setOrigin(0.5);
 
-    const element = this.add.dom(640, 360).createFromCache('loginform');
-    element.addListener('click');
+    const loginButton = this.add.dom(640, 480, 'button', { padding: '10px 20px', fontSize: '18px' }, 'Enter World')
+      .setOrigin(0.5)
+      .addListener('click')
+      .on('click', async () => {
+        const username = usernameInput.node.value.trim();
+        if (!username) return alert('Please enter a name.');
 
-    element.on('click', async event => {
-      if (event.target.name === 'loginButton') {
-        const username = element.getChildByName('username').value.trim();
-        const password = element.getChildByName('password').value.trim();
-
-        if (!username || !password) {
-          alert('Enter a username and password');
-          return;
-        }
-
-        const fakeEmail = `${username}@rune.local`;
-
-        const { data: existingProfiles } = await supabase
+        const { data, error } = await supabase
           .from('rune.player_profiles')
           .select('username')
-          .eq('username', username)
-          .limit(1);
+          .eq('username', username);
 
-        let user;
-        if (existingProfiles && existingProfiles.length > 0) {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: fakeEmail,
-            password
-          });
-          if (error) {
-            alert('Incorrect password for that username.');
-            return;
-          }
-          user = data.user;
-        } else {
-          const { data, error } = await supabase.auth.signUp({
-            email: fakeEmail,
-            password
-          });
-          if (error) {
-            alert(error.message);
-            return;
-          }
-          user = data.user;
-          await supabase.from('rune.player_profiles').insert([{
-            user_id: user.id,
-            username
-          }]);
-        }
+        if (error) return alert(error.message);
 
-        this.scene.start('WorldScene');
-      }
-    });
+        if (data.length === 0)
+          await supabase.from('rune.player_profiles').insert([{ username }]);
+
+        this.scene.start('WorldScene', { username });
+      });
   }
 }
