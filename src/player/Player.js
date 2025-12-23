@@ -46,7 +46,12 @@ export default class Player {
 
     sprite.body.setVelocity(vx, vy);
 
-    if (vx !== 0 || vy !== 0) sprite.anims.play(k?.SHIFT?.isDown ? 'run' : 'walk', true);
-    else sprite.anims.play('idle', true);
+    if (vx !== 0 || vy !== 0) {
+      sprite.anims.play(k?.SHIFT?.isDown ? 'run' : 'walk', true);
+    } else {
+      // Hard-idle: stop animation so the character isn't constantly moving at rest
+      sprite.anims.stop();
+      sprite.setTexture('IDLE', 0);
+    }
 }
 }

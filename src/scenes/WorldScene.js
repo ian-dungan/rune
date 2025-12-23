@@ -15,7 +15,10 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   preload() {
-    // --- Tilemap overworld (Tiled JSON) ---
+    // --- Overworld image (vibrant RPG map) ---
+    this.load.image('overworld_big', 'assets/maps/overworld_big.png');
+
+    // --- Tilemap overworld (legacy / optional) ---
     this.load.tilemapTiledJSON('overworld', 'assets/maps/Overworld.json');
     this.load.image('glades_tiles', 'assets/tilesets/glades_tiles.png');
 
@@ -40,28 +43,57 @@ export default class WorldScene extends Phaser.Scene {
     // Supabase remains intact (login/profile/etc). We only wait for readiness.
     this.supabase = await supabaseReady;
 
-    // --- Build world from Tiled ---
-    const map = this.make.tilemap({ key: 'overworld' });
-    const tileset = map.addTilesetImage('glades_tiles', 'glades_tiles');
+    // --- Build world from a single vibrant overworld image ---
+const bg = this.add.image(0, 0, 'overworld_big').setOrigin(0, 0);
 
-    this.groundLayer = map.createLayer('Ground', tileset, 0, 0);
-    this.waterLayer  = map.createLayer('Water', tileset, 0, 0);
-    this.obstaclesLayer = map.createLayer('Obstacles', tileset, 0, 0);
+const worldW = bg.width;
+const worldH = bg.height;
 
-    // Collision: any tile with property collides=true
-    this.waterLayer.setCollisionByProperty({ collides: true });
-    this.obstaclesLayer.setCollisionByProperty({ collides: true });
+// World bounds
+this.physics.world.setBounds(0, 0, worldW, worldH);
+this.cameras.main.setBounds(0, 0, worldW, worldH);
 
-    // World bounds
-    const worldW = map.widthInPixels;
-    const worldH = map.heightInPixels;
-    this.physics.world.setBounds(0, 0, worldW, worldH);
-    this.cameras.main.setBounds(0, 0, worldW, worldH);
+// --- Auto-collision from the overworld image (water/ocean) ---
+// We sample the image into a coarse grid and mark "water" cells as blocked.
+// This keeps authoring simple while making the world feel real immediately.
+const cell = 32; // collision grid size in pixels (bigger = faster, smaller = tighter)
+const blockers = this.add.group();
+this.blockers = blockers;
+
+try {
+  const srcImg = this.textures.get('overworld_big').getSourceImage();
+  const ctex = document.createElement('canvas');
+  ctex.width = srcImg.width;
+  ctex.height = srcImg.height;
+  const ctx = ctex.getContext('2d');
+  ctx.drawImage(srcImg, 0, 0);
+  const imgData = ctx.getImageData(0, 0, srcImg.width, srcImg.height).data;
+
+  const isWater = (r, g, b) => {
+    // Heuristic: strong blue and not too bright green -> water
+    return (b > 130 && b > g + 20 && b > r + 20);
+  };
+
+  for (let y = 0; y < worldH; y += cell) {
+    for (let x = 0; x < worldW; x += cell) {
+      const sx = Math.min(worldW - 1, x + (cell >> 1));
+      const sy = Math.min(worldH - 1, y + (cell >> 1));
+      const idx = (sy * worldW + sx) * 4;
+      const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2];
+      if (isWater(r, g, b)) {
+        const rect = this.add.rectangle(x + cell / 2, y + cell / 2, cell, cell, 0x000000, 0);
+        this.physics.add.existing(rect, true); // static body
+        blockers.add(rect);
+      }
+    }
+  }
+} catch (e) {
+  console.warn('[World] Collision auto-gen skipped (canvas read failed):', e);
+}
 
     // Spawn point from Tiled
-    const spawn = map.findObject('SpawnPoints', o => o.name === 'player_start') || { x: worldW/2, y: worldH/2 };
-    const spawnX = Math.round(spawn.x);
-    const spawnY = Math.round(spawn.y);
+        const spawnX = Math.round(worldW * 0.70);
+    const spawnY = Math.round(worldH * 0.40);
 
     // Player
     this.player = new Player(this, spawnX, spawnY);
@@ -71,9 +103,8 @@ export default class WorldScene extends Phaser.Scene {
     this.playerShadow = this.add.ellipse(spawnX, spawnY + 18, 28, 12, 0x000000, 0.22);
     this.playerShadow.setDepth(this.player.sprite.y - 1);
 
-    // Colliders
-    this.physics.add.collider(this.player.sprite, this.waterLayer);
-    this.physics.add.collider(this.player.sprite, this.obstaclesLayer);
+    // Colliders (auto-generated)
+    if (this.blockers) this.physics.add.collider(this.player.sprite, this.blockers);
 
     // Camera
     this.cameras.main.startFollow(this.player.sprite, true, 0.10, 0.10);
