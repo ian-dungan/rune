@@ -9,6 +9,7 @@ const config = {
   height: 720,
   backgroundColor: '#0b1020',
   pixelArt: true,
+  dom: { createContainer: true },
   physics: {
     default: 'arcade',
     arcade: { debug: false }

@@ -15,22 +15,14 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   preload() {
-    // --- Background map (generated placeholder png in assets/maps/world_art.png) ---
-    this.load.image('world_art', 'assets/maps/world_art.png');
-    // Walkability mask (white=walkable, black=blocked)
-    this.load.image('walkmask', 'assets/maps/walkmask.png');
-
-    // Foreground occluders (auto-cut from painted map)
-    this.load.image('fg_castle', 'assets/fg/fg_castle.png');
-    this.load.image('fg_forest', 'assets/fg/fg_forest.png');
-    this.load.image('fg_snowtown', 'assets/fg/fg_snowtown.png');
-    this.load.image('fg_desertcity', 'assets/fg/fg_desertcity.png');
-    this.load.image('fg_lighthouse', 'assets/fg/fg_lighthouse.png');
-    this.load.image('fg_tower', 'assets/fg/fg_tower.png');
-    this.load.image('fg_bridge', 'assets/fg/fg_bridge.png');
+    // --- Tilemap overworld (Tiled JSON) ---
+    this.load.tilemapTiledJSON('overworld', 'assets/maps/Overworld.json');
+    this.load.image('glades_tiles', 'assets/tilesets/glades_tiles.png');
 
     // Knight animations (PNG sprite sheets in /assets/sprites/)
-    const animations = ['ATTACK 1','ATTACK 2','ATTACK 3','DEATH','DEFEND','HURT','IDLE','JUMP','RUN','WALK'];
+    const animations = [
+      'IDLE','WALK','RUN','JUMP','ATTACK 1','ATTACK 2','ATTACK 3','DEFEND','HURT','DEATH'
+    ];
     animations.forEach(name => {
       this.load.spritesheet(name, `assets/sprites/${name}.png`, { frameWidth: 84, frameHeight: 84 });
     });
@@ -45,65 +37,47 @@ export default class WorldScene extends Phaser.Scene {
   }
 
   async create() {
-    // Make sure Supabase is ready (we won't hard-fail if creds missing)
+    // Supabase remains intact (login/profile/etc). We only wait for readiness.
     this.supabase = await supabaseReady;
 
-    // Background
-    const bg = this.add.image(0, 0, 'world_art').setOrigin(0, 0);
+    // --- Build world from Tiled ---
+    const map = this.make.tilemap({ key: 'overworld' });
+    const tileset = map.addTilesetImage('glades_tiles', 'glades_tiles');
 
-    // World bounds (match background image)
-    const w = bg.width;
-    const h = bg.height;
-    this.physics.world.setBounds(0, 0, w, h);
-    this.cameras.main.setBounds(0, 0, w, h);
+    this.groundLayer = map.createLayer('Ground', tileset, 0, 0);
+    this.waterLayer  = map.createLayer('Water', tileset, 0, 0);
+    this.obstaclesLayer = map.createLayer('Obstacles', tileset, 0, 0);
 
+    // Collision: any tile with property collides=true
+    this.waterLayer.setCollisionByProperty({ collides: true });
+    this.obstaclesLayer.setCollisionByProperty({ collides: true });
 
-// --- Foreground occluders + simple structure colliders ---
-const fg = [];
-const makeFg = (key, x, y, collider = null) => {
-  const s = this.add.image(x, y, key).setOrigin(0, 0);
-  // Depth is based on the "base" of the object, so the player can walk behind it.
-  s.setDepth(y + s.height);
-  fg.push(s);
+    // World bounds
+    const worldW = map.widthInPixels;
+    const worldH = map.heightInPixels;
+    this.physics.world.setBounds(0, 0, worldW, worldH);
+    this.cameras.main.setBounds(0, 0, worldW, worldH);
 
-  if (collider) {
-    const { cx, cy, cw, ch } = collider;
-    const r = this.add.rectangle(cx, cy, cw, ch, 0x000000, 0);
-    this.physics.add.existing(r, true); // static body
-    r.body.setOffset(-cw / 2, -ch / 2);
-    this._colliders.push(r);
-  }
-  return s;
-};
-
-this._colliders = [];
-
-// Place a handful of occluders (these were auto-cut; feel free to tweak boxes later)
-makeFg('fg_bridge', 360, 40,  { cx: 550, cy: 160, cw: 260, ch: 60 });
-makeFg('fg_castle', 360, 330, { cx: 530, cy: 540, cw: 240, ch: 140 });
-makeFg('fg_forest', 20, 160,  { cx: 190, cy: 410, cw: 260, ch: 120 });
-makeFg('fg_snowtown', 660, 150,{ cx: 840, cy: 330, cw: 240, ch: 120 });
-makeFg('fg_desertcity', 690, 520,{ cx: 860, cy: 705, cw: 230, ch: 130 });
-makeFg('fg_lighthouse', 735, 825,{ cx: 910, cy: 980, cw: 150, ch: 110 });
-makeFg('fg_tower', 0, 820,   { cx: 90,  cy: 990, cw: 140, ch: 110 });
-    // Spawn position (later you can load from Supabase)
-    const spawnX = Math.floor(w * 0.5);
-    const spawnY = Math.floor(h * 0.55);
+    // Spawn point from Tiled
+    const spawn = map.findObject('SpawnPoints', o => o.name === 'player_start') || { x: worldW/2, y: worldH/2 };
+    const spawnX = Math.round(spawn.x);
+    const spawnY = Math.round(spawn.y);
 
     // Player
     this.player = new Player(this, spawnX, spawnY);
     this.player.sprite.setCollideWorldBounds(true);
 
     // Soft shadow to add "volume"
-    this.playerShadow = this.add.ellipse(spawnX, spawnY + 18, 28, 12, 0x000000, 0.25);
+    this.playerShadow = this.add.ellipse(spawnX, spawnY + 18, 28, 12, 0x000000, 0.22);
     this.playerShadow.setDepth(this.player.sprite.y - 1);
 
-    // Collide with key structures (doesn't affect Supabase)
-    this._colliders?.forEach(c => this.physics.add.collider(this.player.sprite, c));
+    // Colliders
+    this.physics.add.collider(this.player.sprite, this.waterLayer);
+    this.physics.add.collider(this.player.sprite, this.obstaclesLayer);
 
     // Camera
-    this.cameras.main.startFollow(this.player.sprite, true, 0.08, 0.08);
-    this.cameras.main.setZoom(1.35);
+    this.cameras.main.startFollow(this.player.sprite, true, 0.10, 0.10);
+    this.cameras.main.setZoom(1.6);
     this.cameras.main.roundPixels = true;
 
     // Mouse wheel zoom
@@ -113,75 +87,38 @@ makeFg('fg_tower', 0, 820,   { cx: 90,  cy: 990, cw: 140, ch: 110 });
       cam.setZoom(next);
     });
 
-
-    // HUD
-    this.coordsText = this.add.text(16, 38, '', {
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
-      fontSize: '14px',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setScrollFactor(0);
-
-    // HUD
-    const name = this.username || 'Guest';
-    this.add.text(16, 12, `🗡️ ${name}`, {
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
-      fontSize: '18px',
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setScrollFactor(0);
-
-    // Music
+    // Music (simple loop)
     try {
-      this.sound.play('plains_theme', { loop: true, volume: 0.45 });
+      const music = this.sound.add('plains_theme', { loop: true, volume: 0.35 });
+      music.play();
     } catch (e) {
-      console.warn('[Audio] Could not start music:', e);
+      console.warn('[Music] Could not start:', e);
     }
+
+    // Minimal HUD: username + coords
+    const label = this.username ? `Player: ${this.username}` : 'Player';
+    this.add.text(12, 10, label, { fontFamily: 'monospace', fontSize: '14px', color: '#ffffff' })
+      .setScrollFactor(0).setDepth(99999);
+
+    this.coordsText = this.add.text(12, 30, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffffff' })
+      .setScrollFactor(0).setDepth(99999);
   }
 
-update(time, delta) {
-  this.player?.update?.();
+  update(_time, delta) {
+    if (!this.player) return;
+    this.player.update(delta);
 
-  if (this.player && this.player.sprite) {
-    // Depth-sort so you can walk behind objects
+    // y-sort for player + shadow so you feel "in" the world
     this.player.sprite.setDepth(this.player.sprite.y);
-
     if (this.playerShadow) {
-      this.playerShadow.x = this.player.sprite.x;
-      this.playerShadow.y = this.player.sprite.y + 18;
+      this.playerShadow.setPosition(this.player.sprite.x, this.player.sprite.y + 18);
       this.playerShadow.setDepth(this.player.sprite.y - 1);
     }
 
-    // Walkmask collision (keeps you out of water / high mountains)
-    const tx = Math.floor(this.player.sprite.x);
-    const ty = Math.floor(this.player.sprite.y + 20); // feet
-    const tex = this.textures.get('walkmask');
-
-    if (!this._lastGood) this._lastGood = { x: this.player.sprite.x, y: this.player.sprite.y };
-
-    const src = tex?.getSourceImage?.();
-    const inBounds = src && tx >= 0 && ty >= 0 && tx < src.width && ty < src.height;
-
-    if (inBounds) {
-      const p = tex.getPixel(tx, ty);
-      const walkable = p && p.r > 30; // white-ish
-      if (walkable) {
-        this._lastGood.x = this.player.sprite.x;
-        this._lastGood.y = this.player.sprite.y;
-      } else {
-        // Revert to last good position
-        this.player.sprite.setPosition(this._lastGood.x, this._lastGood.y);
-        this.player.sprite.body?.setVelocity(0, 0);
-      }
+    if (this.coordsText) {
+      const x = Math.round(this.player.sprite.x);
+      const y = Math.round(this.player.sprite.y);
+      this.coordsText.setText(`x:${x}  y:${y}`);
     }
   }
-
-  if (this.coordsText && this.player?.sprite) {
-    const x = Math.round(this.player.sprite.x);
-    const y = Math.round(this.player.sprite.y);
-    this.coordsText.setText(`📍 ${x}, ${y}`);
-  }
-}
 }
