@@ -48,7 +48,7 @@ export default class LoginScene extends Phaser.Scene {
       console.log(`Attempting login as: ${username}`);
 
       const { data: existing, error } = await supabase
-        .from('rune.player_profiles')
+        .from('rune_player_profiles')
         .select('username')
         .eq('username_norm', username)
         .maybeSingle();
