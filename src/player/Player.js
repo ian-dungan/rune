@@ -4,21 +4,24 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true);
-    this.speed = 150;
+    this.speed = 160;
+    this.lastStep = 0;
     this.stepSound = scene.sound.add('step', { volume: 0.2 });
   }
 
-  handleInput(keys) {
+  update(keys, delta) {
     let vx = 0, vy = 0;
     if (keys.W.isDown) vy = -this.speed;
     else if (keys.S.isDown) vy = this.speed;
     if (keys.A.isDown) vx = -this.speed;
     else if (keys.D.isDown) vx = this.speed;
     this.setVelocity(vx, vy);
-    if (vx || vy) this.playStep();
-  }
 
-  playStep() {
-    if (!this.stepSound.isPlaying) this.stepSound.play();
+    if (vx || vy) {
+      if (delta - this.lastStep > 400) {
+        this.stepSound.play();
+        this.lastStep = delta;
+      }
+    }
   }
 }
