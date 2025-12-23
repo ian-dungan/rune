@@ -1,0 +1,81 @@
+{
+  "height": 500,
+  "width": 500,
+  "tileheight": 32,
+  "tilewidth": 32,
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "infinite": false,
+  "layers": [
+    {
+      "name": "ArtLayer",
+      "type": "imagelayer",
+      "visible": true,
+      "image": "assets/maps/world_art.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "name": "Collision",
+      "type": "objectgroup",
+      "visible": true,
+      "objects": [
+        {
+          "name": "north_mountains",
+          "type": "collision",
+          "x": 0,
+          "y": 0,
+          "width": 16000,
+          "height": 1600
+        },
+        {
+          "name": "south_swamp",
+          "type": "collision",
+          "x": 0,
+          "y": 14400,
+          "width": 16000,
+          "height": 1600
+        },
+        {
+          "name": "west_desert",
+          "type": "collision",
+          "x": 0,
+          "y": 0,
+          "width": 1600,
+          "height": 16000
+        },
+        {
+          "name": "east_forest",
+          "type": "collision",
+          "x": 14400,
+          "y": 0,
+          "width": 1600,
+          "height": 16000
+        },
+        {
+          "name": "castle_walls",
+          "type": "collision",
+          "x": 7200,
+          "y": 1600,
+          "width": 1600,
+          "height": 800
+        },
+        {
+          "name": "rivers",
+          "type": "collision",
+          "x": 4000,
+          "y": 0,
+          "width": 600,
+          "height": 16000
+        },
+        {
+          "x": 8000,
+          "y": 8000,
+          "name": "spawn",
+          "type": "player_spawn"
+        }
+      ]
+    }
+  ],
+  "tilesets": []
+}

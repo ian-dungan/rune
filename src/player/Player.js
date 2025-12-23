@@ -1,27 +1,19 @@
-export default class Player extends Phaser.Physics.Arcade.Sprite {
+export default class Player {
   constructor(scene, x, y, texture) {
-    super(scene, x, y, texture);
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
-    this.setCollideWorldBounds(true);
-    this.speed = 160;
-    this.lastStep = 0;
-    this.stepSound = scene.sound.add('step', { volume: 0.2 });
+    this.scene = scene;
+    this.sprite = scene.physics.add.sprite(x, y, texture, 0);
+    this.sprite.setCollideWorldBounds(true);
+    this.cursors = scene.input.keyboard.createCursorKeys();
+    this.speed = 200;
+    this.id = crypto.randomUUID();
   }
-
-  update(keys, delta) {
-    let vx = 0, vy = 0;
-    if (keys.W.isDown) vy = -this.speed;
-    else if (keys.S.isDown) vy = this.speed;
-    if (keys.A.isDown) vx = -this.speed;
-    else if (keys.D.isDown) vx = this.speed;
-    this.setVelocity(vx, vy);
-
-    if (vx || vy) {
-      if (delta - this.lastStep > 400) {
-        this.stepSound.play();
-        this.lastStep = delta;
-      }
-    }
+  update() {
+    const { cursors, sprite, speed } = this;
+    sprite.body.setVelocity(0);
+    if (cursors.left.isDown) sprite.body.setVelocityX(-speed);
+    else if (cursors.right.isDown) sprite.body.setVelocityX(speed);
+    if (cursors.up.isDown) sprite.body.setVelocityY(-speed);
+    else if (cursors.down.isDown) sprite.body.setVelocityY(speed);
+    sprite.body.velocity.normalize().scale(speed);
   }
 }
