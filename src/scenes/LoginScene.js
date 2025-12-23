@@ -1,7 +1,11 @@
+// LoginScene.js
+import Phaser from '../lib/phaser.js';
 import { supabase } from '../supabase/SupabaseClient.js';
 
 export default class LoginScene extends Phaser.Scene {
-  constructor() { super('LoginScene'); }
+  constructor() {
+    super('LoginScene');
+  }
 
   preload() {
     this.load.image('ui_parchment', 'assets/images/ui_parchment.png');
@@ -9,60 +13,60 @@ export default class LoginScene extends Phaser.Scene {
 
   async create() {
     console.log('🧙 Creating login scene...');
-    this.add.image(640, 360, 'ui_parchment').setAlpha(0.8);
-    this.add.text(640, 180, 'Rune', {
-      fontFamily: 'Georgia',
-      fontSize: '72px',
-      color: '#fff',
-      stroke: '#000',
-      strokeThickness: 6
-    }).setOrigin(0.5);
 
-    const input = document.createElement('input');
-    Object.assign(input.style, {
-      position: 'absolute',
-      top: '60%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      padding: '12px',
-      fontSize: '18px',
-      borderRadius: '10px',
-      border: '2px solid #333'
-    });
-    input.placeholder = 'Enter username';
-    document.body.appendChild(input);
+    const bg = this.add.image(this.scale.width / 2, this.scale.height / 2, 'ui_parchment');
+    bg.setDisplaySize(this.scale.width, this.scale.height);
 
-    const button = document.createElement('button');
-    Object.assign(button.style, {
-      position: 'absolute',
-      top: '70%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      padding: '12px 30px',
-      fontSize: '20px',
-      borderRadius: '8px',
-      cursor: 'pointer'
-    });
-    button.textContent = 'Enter World';
-    document.body.appendChild(button);
+    let container = document.querySelector('#game-login');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'game-login';
+      container.style.position = 'absolute';
+      container.style.top = '50%';
+      container.style.left = '50%';
+      container.style.transform = 'translate(-50%, -50%)';
+      container.style.textAlign = 'center';
+      container.style.background = 'rgba(0,0,0,0.4)';
+      container.style.padding = '20px';
+      container.style.borderRadius = '12px';
+      container.style.fontFamily = 'serif';
+      document.body.appendChild(container);
+    }
 
-    button.onclick = async () => {
-      const username = input.value.trim();
-      if (!username) return alert('Enter your name');
+    container.innerHTML = `
+      <h2 style="color: #fff;">Enter Your Username</h2>
+      <input id="username" type="text" placeholder="Adventurer123"
+             style="padding:10px; border-radius:6px; width:200px;"/>
+      <br><br>
+      <button id="loginBtn" 
+              style="padding:10px 20px; border-radius:8px; cursor:pointer;">Login</button>
+    `;
 
-      const { data, error } = await supabase
-        .from('rune.player_profiles_view')
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const username = document.getElementById('username').value.trim().toLowerCase();
+      if (!username) return alert('Enter a username!');
+
+      console.log(`Attempting login as: ${username}`);
+
+      const { data: existing, error } = await supabase
+        .from('rune.player_profiles')
         .select('username')
-        .eq('username', username);
+        .eq('username_norm', username)
+        .maybeSingle();
 
-      if (error) return alert(error.message);
+      if (error) {
+        console.error('Error checking username:', error);
+        alert('Connection error. Check console.');
+        return;
+      }
 
-      if (data.length === 0)
-        await supabase.from('rune.player_profiles_view').insert([{ username }]);
-
-      input.remove();
-      button.remove();
-      this.scene.start('WorldScene', { username });
-    };
+      if (existing) {
+        console.log('✅ Username exists, logging in...');
+        this.scene.start('WorldScene', { username });
+      } else {
+        alert('No such adventurer found. Please register in Supabase first.');
+      }
+    });
   }
 }
+
