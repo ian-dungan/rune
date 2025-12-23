@@ -1,5 +1,5 @@
 import * as Phaser from '../lib/phaser.esm.js';
-import { supabase } from '../supabase/SupabaseClient.js';
+import { supabaseReady } from '../supabase/SupabaseClient.js';
 
 export default class LoginScene extends Phaser.Scene {
   constructor() {
@@ -8,63 +8,72 @@ export default class LoginScene extends Phaser.Scene {
 
   preload() {
     this.load.image('ui_parchment', 'assets/images/ui_parchment.png');
+    this.load.html('loginform', 'src/scenes/loginform.html');
   }
 
   async create() {
     console.log('🧙 Creating login scene...');
 
+    // Ensure Supabase client is initialized (but don't crash if credentials missing)
+    const supabase = await supabaseReady;
+
+    this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x0b1020).setOrigin(0, 0);
+
     const bg = this.add.image(this.scale.width / 2, this.scale.height / 2, 'ui_parchment');
-    bg.setDisplaySize(this.scale.width, this.scale.height);
+    bg.setScale(Math.min(this.scale.width / bg.width, this.scale.height / bg.height) * 0.9);
 
-    let container = document.querySelector('#game-login');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'game-login';
-      container.style.position = 'absolute';
-      container.style.top = '50%';
-      container.style.left = '50%';
-      container.style.transform = 'translate(-50%, -50%)';
-      container.style.textAlign = 'center';
-      container.style.background = 'rgba(0,0,0,0.4)';
-      container.style.padding = '20px';
-      container.style.borderRadius = '12px';
-      container.style.fontFamily = 'serif';
-      document.body.appendChild(container);
-    }
+    const title = this.add.text(this.scale.width / 2, 110, 'Rune', {
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+      fontSize: '48px',
+      color: '#1b2238'
+    }).setOrigin(0.5, 0.5);
 
-    container.innerHTML = `
-      <h2 style="color: #fff;">Enter Your Username</h2>
-      <input id="username" type="text" placeholder="Adventurer123"
-             style="padding:10px; border-radius:6px; width:200px;"/>
-      <br><br>
-      <button id="loginBtn"
-              style="padding:10px 20px; border-radius:8px; cursor:pointer;">Login</button>
-    `;
+    const help = this.add.text(this.scale.width / 2, 165, 'Log in with your adventurer name', {
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Arial',
+      fontSize: '16px',
+      color: '#2b3558'
+    }).setOrigin(0.5, 0.5);
 
-    document.getElementById('loginBtn').addEventListener('click', async () => {
-      const username = document.getElementById('username').value.trim().toLowerCase();
-      if (!username) return alert('Enter a username!');
+    const element = this.add.dom(this.scale.width / 2, this.scale.height / 2 + 30).createFromCache('loginform');
 
-      console.log(`Attempting login as: ${username}`);
+    const usernameInput = element.getChildByName('username');
+    const submitBtn = element.getChildByID('loginBtn');
 
-      const { data: existing, error } = await supabase
-        .from('rune_player_profiles')
-        .select('username')
-        .eq('username_norm', username)
-        .maybeSingle();
+    submitBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
 
-      if (error) {
-        console.error('Error checking username:', error);
-        alert('Connection error. Check console.');
+      const username = (usernameInput?.value || '').trim();
+      if (!username) {
+        alert('Enter a name.');
         return;
       }
 
-      if (existing) {
-        console.log('✅ Username exists, logging in...');
-        container.remove();
-        this.scene.start('WorldScene', { username });
-      } else {
-        alert('No such adventurer found. Please register in Supabase first.');
+      // Normalize username for lookup
+      const username_norm = username.toLowerCase();
+
+      try {
+        const { data: existing, error } = await supabase
+          .from('rune_player_profiles')
+          .select('username')
+          .eq('username_norm', username_norm)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error checking username:', error);
+          alert('Database connection error. Check console.');
+          return;
+        }
+
+        if (existing) {
+          console.log('✅ Username exists, logging in...');
+          element.destroy();
+          this.scene.start('WorldScene', { username, username_norm });
+        } else {
+          alert('No such adventurer found. Please register in Supabase first.');
+        }
+      } catch (err) {
+        console.error('Unexpected login error:', err);
+        alert('Login error. Check console.');
       }
     });
   }
