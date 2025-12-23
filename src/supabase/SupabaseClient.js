@@ -8,9 +8,10 @@ console.log('✅ Supabase credentials loaded from private-supabase.js');
 (async () => {
   try {
     const { data, error, status } = await supabase
-      .from('rune.player_profiles_view')
-      .select('username')
-      .limit(1);
+  .schema('rune')
+  .from('player_profiles_view')
+  .select('username')
+  .limit(1);
 
     if (error) console.error('⚠️ Supabase test query failed:', error.message);
     else console.log(`✅ Supabase connected — status ${status}`);
