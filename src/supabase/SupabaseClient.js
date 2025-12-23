@@ -18,7 +18,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 (async () => {
   try {
     const { data, error } = await supabase
-      .from('rune.player_profiles')
+      .from('rune_player_profiles')
       .select('username')
       .limit(1);
 
