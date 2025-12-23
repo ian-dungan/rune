@@ -1,10 +1,14 @@
-# Rune v1.0.0
+# Rune v1.0.0 (Advanced Build)
+Fantasy RPG prototype powered by Phaser 3 + Supabase.
 
-Fantasy RPG prototype built with Phaser 3 + Supabase.
+Features:
+- Username login & persistence via Supabase
+- Responsive mobile controls (auto-detect)
+- Fantasy parchment UI
+- Ambient soundscape
+- Starting town overworld (Runescape-inspired)
+- Modular structure for expansion (player/world systems)
 
-## Features
-- Username login
-- Player profiles stored in Supabase
-- Starting town map
-- Mobile and Desktop controls
-- Ambient world sound
+Run locally:
+  python -m http.server
+  Open http://localhost:8000
