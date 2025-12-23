@@ -4,18 +4,17 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../../config/private-supabase.j
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 console.log('✅ Supabase credentials loaded from private-supabase.js');
 
-// Quick test to confirm connection:
 (async () => {
   try {
+    console.log('🔎 Testing Supabase connection to public.player_profiles_view');
     const { data, error, status } = await supabase
-  .schema('rune')
-  .from('player_profiles_view')
-  .select('username')
-  .limit(1);
+      .from('player_profiles_view')
+      .select('username')
+      .limit(1);
 
     if (error) console.error('⚠️ Supabase test query failed:', error.message);
     else console.log(`✅ Supabase connected — status ${status}`);
   } catch (err) {
-    console.error('❌ Supabase test failed:', err);
+    console.error('❌ Supabase connection test failed:', err);
   }
 })();
