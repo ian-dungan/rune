@@ -113,3 +113,24 @@ Delaford contains work from multiple sources not organically made by contributio
 Delaford contributors nor anyone associated with Delaford will never contact you in regards testing or instructing you to download anything in regards to the development of the game for the reward of payment or digital currency such as cryptocurrency.
 
 We have had verifiable reports of users pretending to be owners of Delaford promising money if they download a folder with the repository's contents inside. Please be aware.
+
+
+## GitHub Pages build (no local Node required)
+
+This repo targets an older Node toolchain. Instead of building locally, this project now ships with a GitHub Actions workflow that:
+
+1) installs Node 10.24.1 on the runner  
+2) runs `npm ci --ignore-scripts` (skips postinstall server build)  
+3) runs `npm run build` (Vue build)  
+4) publishes `dist/` to the `gh-pages` branch
+
+### One-time setup
+
+1. Push this repo to GitHub (branch: `main`)
+2. Go to **Settings → Pages**
+3. Set **Source** to **Deploy from a branch**
+4. Choose **Branch**: `gh-pages` and **Folder**: `/ (root)`
+
+After the first workflow run completes, your site will be live.
+
+> Note: `publicPath` is set to `/Rune/` for production. If your repo name is not `Rune`, edit `vue.config.js` and rebuild.
