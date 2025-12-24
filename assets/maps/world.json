@@ -1,5 +1,0 @@
-{
-  "height": 100, "width": 100, "tilewidth": 32, "tileheight": 32,
-  "layers": [{"name":"Ground","data":[],"type":"tilelayer"}],
-  "tilesets": [{"firstgid":1,"source":"../tilesets/grass.png"}]
-}
