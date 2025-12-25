@@ -1,22 +1,21 @@
-const path = require('path');
+const path = require("path");
 
 module.exports = {
+  // Best for GitHub Pages (prevents /rune vs /Rune issues)
   publicPath: "./",
-};
-
-
-module.exports = {
-  publicPath: process.env.NODE_ENV === 'production' ? '/rune/' : '/',
 
   configureWebpack: {
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, 'src/'),
-        '@server': path.resolve(__dirname, 'server/'),
-        shared: path.resolve(__dirname, 'server/shared'),
-        root: path.resolve(__dirname, process.env.NODE_ENV === 'production' ? 'build/' : 'server/'),
+        "@": path.resolve(__dirname, "src/"),
+        "@server": path.resolve(__dirname, "server/"),
+        shared: path.resolve(__dirname, "server/shared"),
+        root: path.resolve(
+          __dirname,
+          process.env.NODE_ENV === "production" ? "build/" : "server/"
+        ),
       },
-      extensions: ['.js'],
+      extensions: [".js"],
     },
   },
 };
