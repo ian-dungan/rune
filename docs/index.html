@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Rune (Static /docs)</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <div id="hud">
+    <div id="title">
+      <span class="badge">Rune</span>
+      <span class="sub">Static demo (no build tools)</span>
+    </div>
+
+    <div id="help">
+      <div><b>Move:</b> WASD / Arrow Keys · <b>Mobile:</b> left joystick · <b>Interact:</b> E · <b>Chat:</b> Enter</div>
+      <div class="muted">Tip: GitHub Pages → Settings → Pages → Branch: main · Folder: /docs</div>
+    </div>
+
+    <div id="panels">
+      <div class="panel" id="stats">
+        <div class="panelTitle">Character</div>
+        <div class="row"><span class="k">Name</span><span class="v" id="name">Adventurer</span></div>
+        <div class="row"><span class="k">HP</span><span class="v"><span id="hp">100</span>/100</span></div>
+        <div class="row"><span class="k">Coords</span><span class="v" id="coords">0,0</span></div>
+        <div class="row"><span class="k">Biome</span><span class="v" id="biome">—</span></div>
+      </div>
+
+      <div class="panel" id="chat">
+        <div class="panelTitle">Chat</div>
+        <div id="chatLog" aria-live="polite"></div>
+        <div id="chatInputWrap">
+          <input id="chatInput" type="text" placeholder="Press Enter to chat…" autocomplete="off" />
+          <button id="sendBtn" title="Send">Send</button>
+        </div>
+      </div>
+
+      <div class="panel" id="minimapPanel">
+        <div class="panelTitle">Minimap</div>
+        <canvas id="minimap" width="180" height="180"></canvas>
+        <div class="muted small">Green=grass · Blue=water · Tan=path</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameWrap">
+    <canvas id="game" width="960" height="540"></canvas>
+    <div id="touch" class="touchOnly" aria-hidden="true">
+      <div id="stickBase"><div id="stickKnob"></div></div>
+      <button id="btnE" class="touchBtn">E</button>
+    </div>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
