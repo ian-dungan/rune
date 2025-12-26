@@ -18,18 +18,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Use Node 16
         uses: actions/setup-node@v4
         with:
           node-version: "16"
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
+      # package.json has a postinstall that builds the server.
+      # GitHub Pages only needs the client dist, so ignore install scripts here.
+      - name: Install dependencies (ignore postinstall)
+        run: npm install --legacy-peer-deps --ignore-scripts
 
-      - name: Build
+      - name: Build client (dist)
         run: npm run build
 
       - name: Upload Pages artifact (dist)
@@ -41,5 +42,5 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         uses: actions/deploy-pages@v4
