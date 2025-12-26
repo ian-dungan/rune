@@ -1,7 +1,7 @@
 const path = require("path");
 
 module.exports = {
-  // Best for GitHub Pages (prevents /rune vs /Rune issues)
+  // GitHub Pages-safe (avoids /rune vs /Rune issues)
   publicPath: "./",
 
   configureWebpack: {

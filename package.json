@@ -64,13 +64,13 @@
     "eslint-plugin-import": "^2.18.2",
     "lint-staged": "^8.1.6",
     "ndb": "^1.1.5",
-    "node-sass": "^4.14.1",
     "nodemon": "^1.18.4",
     "sass-loader": "^7.0.1",
     "stylelint": "^10.0.1",
     "stylelint-config-standard": "^18.2.0",
     "stylelint-processor-html": "^1.0.0",
-    "vue-template-compiler": "^2.5.17"
+    "vue-template-compiler": "^2.5.17",
+    "sass": "^1.69.5"
   },
   "browserslist": [
     "> 1%",
